@@ -1,6 +1,6 @@
 // src/dashboard/api.ts
 // REST API routes for dashboard v3.
-// All data comes from SQLite (persistent) + live in-memory for current session.
+// Supabase-first reads for production, SQLite fallback for local dev.
 
 import { Router, Request, Response } from 'express'
 import { metrics } from '../metrics/collector'
@@ -8,6 +8,12 @@ import { runHealthChecks } from '../metrics/health-checks'
 import { initAgentActivities } from '../metrics/agent-tracker'
 import { readFileSync, existsSync } from 'fs'
 import { join } from 'path'
+import {
+  getSupabaseEngineStats, getSupabaseAgentEfficiency,
+  getSupabaseWeeklyEfficiency, getSupabaseProviderCosts,
+  getSupabaseRecentQueries, getSupabaseCompileHistory,
+  refreshSupabaseViews
+} from '../metrics/supabase-writer'
 
 const router = Router()
 

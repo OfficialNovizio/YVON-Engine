@@ -1,6 +1,6 @@
 {
   "name": "yvon-engine",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "description": "YVON Engine — AI Agent OS kernel. 13 agents, Context Intelligence Engine, TOON compression, knowledge graphs, Hermes sync. One npm install, full agent team.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

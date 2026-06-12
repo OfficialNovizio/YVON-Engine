@@ -17,6 +17,9 @@ import {
   getProviderCosts, getRecentQueries, getCompileHistory,
   getAnomalies
 } from './store'
+import {
+  writeToonToSupabase, writeEngineQueryToSupabase, writeCompileToSupabase
+} from './supabase-writer'
 
 class MetricsCollector {
   // Always enabled — no guard
@@ -43,6 +46,8 @@ class MetricsCollector {
     if (this.toonCalls.length > 10000) this.toonCalls.shift()
     // Persist to SQLite (fire-and-forget, non-blocking)
     persistToonCall(call)
+    // Dual-write to Supabase (production persistence)
+    writeToonToSupabase(call).catch(() => {})
   }
 
   recordEngineQuery(query: EngineQuery): void {
@@ -50,6 +55,7 @@ class MetricsCollector {
     this.engineQueries.push(query)
     if (this.engineQueries.length > 10000) this.engineQueries.shift()
     persistEngineQuery(query)
+    writeEngineQueryToSupabase(query).catch(() => {})
   }
 
   recordCompile(record: CompileRecord): void {
@@ -57,6 +63,7 @@ class MetricsCollector {
     this.compileRecords.push(record)
     if (this.compileRecords.length > 500) this.compileRecords.shift()
     persistCompileRecord(record)
+    writeCompileToSupabase(record).catch(() => {})
   }
 
   recordCieTick(tick: CiePipelineTick): void {
