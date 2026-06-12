@@ -12,7 +12,8 @@
     "./algorithms": "./dist/algorithms/index.js",
     "./adapters": "./dist/adapters/index.js",
     "./cli": "./cli/yvon.js",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./graphs": "./dist/graphs/index.js"
   },
   "bin": {
     "yvon": "./cli/yvon.js"

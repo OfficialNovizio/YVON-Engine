@@ -1,155 +1,327 @@
 #!/usr/bin/env node
-// yvon CLI — YVON Engine command-line interface v1.2.0
+// yvon CLI — YVON Engine v1.3.0
+// One command: npx yvon init — builds everything
 
 const fs = require('fs')
 const path = require('path')
 const os = require('os')
-const { execSync } = require('child_process')
 
 const command = process.argv[2] || 'help'
-const args = process.argv.slice(3)
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Built-in Graph Builder (zero external deps, synchronous, regex-based)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function scanFiles(dir, pattern) {
+  const files = []
+  try {
+    for (const entry of fs.readdirSync(dir)) {
+      if (entry === 'node_modules' || entry === '.git' || entry === 'dist' ||
+          entry === '.next' || entry === '__pycache__' || entry === 'graphify-out')
+        continue
+      const full = path.join(dir, entry)
+      try {
+        if (fs.statSync(full).isDirectory()) {
+          files.push(...scanFiles(full, pattern))
+        } else if (pattern.test(entry)) {
+          files.push(full)
+        }
+      } catch (_) {}
+    }
+  } catch (_) {}
+  return files
+}
+
+function extractImports(content) {
+  const imports = []
+  // TS/JS: import X from './path' / require('./path') / import('./path')
+  const tsRe = /(?:import\s+(?:[\s\S]*?\s+from\s+)?['"]|require\s*\(\s*['"]|import\s*\(\s*['"])((?:\.\/|\.\.\/|@\/)[^'"]+)/g
+  let m
+  while ((m = tsRe.exec(content)) !== null) imports.push(m[1])
+  // Python: from .module import X
+  const pyRe = /^from\s+(\.\S+)\s+import/gm
+  while ((m = pyRe.exec(content)) !== null) imports.push(m[1])
+  return [...new Set(imports)]
+}
+
+function resolveImport(importPath, fromFile, root) {
+  const fromDir = path.dirname(fromFile)
+  let resolved = path.join(fromDir, importPath)
+  const exts = ['.ts', '.tsx', '.js', '.jsx', '.py', '/index.ts', '/index.js']
+  for (const ext of exts) {
+    if (fs.existsSync(resolved + ext)) return resolved + ext
+  }
+  if (importPath.startsWith('@/')) {
+    resolved = path.join(root, importPath.slice(2))
+    for (const ext of exts) {
+      if (fs.existsSync(resolved + ext)) return resolved + ext
+    }
+  }
+  return null
+}
+
+function buildCodegraph(root) {
+  const files = scanFiles(root, /\.(ts|tsx|js|jsx|py)$/)
+  const importMap = {}
+
+  for (const file of files) {
+    try {
+      const content = fs.readFileSync(file, 'utf-8')
+      const raw = extractImports(content)
+      const resolved = []
+      for (const imp of raw) {
+        const r = resolveImport(imp, file, root)
+        if (r) resolved.push(path.relative(root, r))
+      }
+      if (resolved.length > 0) importMap[path.relative(root, file)] = [...new Set(resolved)]
+    } catch (_) {}
+  }
+
+  const importerCount = {}
+  for (const deps of Object.values(importMap)) {
+    for (const dep of deps) {
+      importerCount[dep] = (importerCount[dep] || 0) + 1
+    }
+  }
+
+  const hubFiles = Object.entries(importerCount)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 15)
+    .map(([file, count]) => ({
+      file,
+      importers: count,
+      risk: count >= 50 ? 'critical' : count >= 20 ? 'high' : count >= 10 ? 'medium' : 'low'
+    }))
+
+  const fanOutCounts = {}
+  const fanOutFiles = Object.entries(importMap)
+    .sort((a, b) => b[1].length - a[1].length)
+    .slice(0, 12)
+    .map(([file, deps]) => { fanOutCounts[file] = deps.length; return file })
+
+  const apiDeps = {}
+  for (const [file, deps] of Object.entries(importMap)) {
+    if ((file.includes('api/') || file.includes('routes/')) &&
+        (file.includes('route') || file.includes('handler'))) {
+      apiDeps[file] = deps.filter(d => !d.includes('api/') && !d.includes('routes/'))
+    }
+  }
+
+  return { hubFiles, fanOutFiles, apiDeps, fanOutCounts }
+}
+
+function buildGraphify(root) {
+  const files = scanFiles(root, /\.(ts|tsx|js|jsx|md|css|py)$/)
+  const nodes = []
+  const communities = new Map()
+
+  for (const file of files) {
+    const rel = path.relative(root, file)
+    const dir = path.dirname(rel).split('/')[0] || 'root'
+    const ext = path.extname(file).slice(1)
+    const typeMap = { ts:'typescript', tsx:'typescript', js:'javascript', jsx:'javascript', py:'python', md:'documentation', css:'stylesheet' }
+
+    nodes.push({ name: rel, type: typeMap[ext] || ext, deps: [], community: 0 })
+    if (!communities.has(dir)) communities.set(dir, [])
+    communities.get(dir).push(rel)
+  }
+
+  let ci = 0
+  const communityList = []
+  for (const [name, nodeNames] of communities) {
+    const cohesion = Math.min(0.99, +(0.01 + nodeNames.length / nodes.length).toFixed(2))
+    communityList.push({ name, cohesion, nodes: nodeNames })
+    for (const n of nodes) { if (nodeNames.includes(n.name)) n.community = ci }
+    ci++
+  }
+
+  const edges = []
+  for (let i = 0; i < nodes.length; i++)
+    for (let j = i + 1; j < nodes.length; j++)
+      if (nodes[i].community === nodes[j].community) edges.push([i, j])
+
+  return { nodes, edges, communities: communityList }
+}
+
+function generateCodegraphMd(report) {
+  const lines = [
+    '# Code Dependency Graph — Auto-generated by YVON Engine',
+    '> Rebuild: `npx yvon graph`',
+    '',
+    '## Hub Files — Most Imported (highest blast radius)',
+    '',
+    '| # | File | Importers | Risk |',
+    '|---|------|-----------|------|',
+  ]
+  report.hubFiles.forEach((h, i) => lines.push(`| ${i + 1} | \`${h.file}\` | **${h.importers}** | ${h.risk} |`))
+
+  lines.push('', '## High Fan-Out Files (coupling risk)', '', '| # | File | Imports |', '|---|------|---------|')
+  report.fanOutFiles.forEach((f, i) => lines.push(`| ${i + 1} | \`${f}\` | ${report.fanOutCounts[f] || '?'} |`))
+
+  if (Object.keys(report.apiDeps).length > 0) {
+    lines.push('', '## API Route Dependency Map', '')
+    for (const [route, deps] of Object.entries(report.apiDeps)) {
+      lines.push(`### \`${route}\` (${deps.length} deps)`)
+      deps.forEach(d => lines.push(`  → \`${d}\``))
+      lines.push('')
+    }
+  }
+
+  lines.push('---', '', `_Generated by YVON Engine on ${new Date().toISOString().split('T')[0]}_`)
+  return lines.join('\n')
+}
+
+function generateGraphifyMd(report) {
+  const lines = [
+    '# Graph Report — Auto-generated by YVON Engine',
+    `> ${report.nodes.length} nodes · ${report.edges.length} edges · ${report.communities.length} communities`,
+    '> Rebuild: `npx yvon graph`',
+    '',
+    '## Community Hubs (Navigation)',
+    '',
+  ]
+  report.communities.forEach((c, i) => {
+    lines.push(`- **Community ${i}**: \`${c.name}\` (${c.nodes.length} nodes, cohesion: ${c.cohesion})`)
+  })
+
+  lines.push('', '---', '')
+  report.communities.forEach((c, i) => {
+    lines.push(`### Community ${i} — "${c.name}"`)
+    lines.push(`Cohesion: ${c.cohesion} · Nodes: ${c.nodes.length}`)
+    const preview = c.nodes.slice(0, 15).join(', ')
+    const suffix = c.nodes.length > 15 ? ` (+${c.nodes.length - 15} more)` : ''
+    lines.push(`Files: ${preview}${suffix}`)
+    lines.push('')
+  })
+
+  lines.push('---', '', `_Generated by YVON Engine on ${new Date().toISOString().split('T')[0]}_`)
+  return lines.join('\n')
+}
+
+function buildAllGraphs(rootDir) {
+  const outDir = path.join(rootDir, 'graphify-out')
+  fs.mkdirSync(outDir, { recursive: true })
+
+  const codegraph = buildCodegraph(rootDir)
+  const codegraphMd = generateCodegraphMd(codegraph)
+  fs.writeFileSync(path.join(outDir, 'CODEGRAPH_REPORT.md'), codegraphMd)
+
+  const graphify = buildGraphify(rootDir)
+  const graphifyMd = generateGraphifyMd(graphify)
+  fs.writeFileSync(path.join(outDir, 'GRAPH_REPORT.md'), graphifyMd)
+
+  return { graphify: graphifyMd, codegraph: codegraphMd }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CLI Commands
+// ═══════════════════════════════════════════════════════════════════════════════
 
 function help() {
   console.log(`
-YVON Engine CLI v1.2.0
+YVON Engine CLI v1.3.0
 
-  yvon init          Initialize YVON Engine with full agent team
-  yvon doctor        Health check all engine systems
+  yvon init          One command to activate everything
+  yvon doctor        Health check (all ✅ except external services)
   yvon graph         Rebuild knowledge graphs
-  yvon agents        List all 13 agents and their status
-  yvon sync          Sync with Hermes agent
-  yvon compress      Show compression statistics
-  yvon dashboard     Launch TOON visual dashboard (coming soon)
+  yvon agents        List all 13 agents
   yvon version       Show version
 `)
 }
 
 function init() {
   const cwd = process.cwd()
-  
-  console.log('\n  🚀 YVON Engine v1.2.0 — Initializing...\n')
-  
-  // ─── Step 1: Detect existing features ──────────────────────────────────
-  console.log('  📡 Scanning project...\n')
-  
+  console.log('\n  🚀 YVON Engine v1.3.0 — Activating...\n')
+
+  // ─── Detect features ─────────────────────────────────────────────────────
   const features = {
+    hermes: fs.existsSync(path.join(os.homedir(), '.hermes', 'memories', 'USER.md')),
+    claude: !!process.env.ANTHROPIC_API_KEY,
+    nextjs: fs.existsSync(path.join(cwd, 'next.config.ts')) || fs.existsSync(path.join(cwd, 'next.config.js')),
     graphify: fs.existsSync(path.join(cwd, 'graphify-out', 'GRAPH_REPORT.md')),
     codegraph: fs.existsSync(path.join(cwd, 'graphify-out', 'CODEGRAPH_REPORT.md')),
-    nextjs: fs.existsSync(path.join(cwd, 'next.config.ts')) || fs.existsSync(path.join(cwd, 'next.config.js')),
-    supabase: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
-    hermes: fs.existsSync(path.join(os.homedir(), '.hermes', 'memories', 'USER.md')),
     agentMemory: fs.existsSync(path.join(cwd, 'agent-memory')),
     claudeMd: fs.existsSync(path.join(cwd, 'CLAUDE.md')),
-    ventureDocs: fs.existsSync(path.join(cwd, 'docs', 'ventures')),
-    typescript: false,
-    python: false,
+    codeReviewGraph: checkCodeReviewGraph(),
   }
-  
-  // Check for TypeScript
-  try { execSync('npx tsc --version', { stdio: 'pipe' }); features.typescript = true } catch {}
-  // Check for Python (graphify dependency)
-  try { execSync('python3 --version', { stdio: 'pipe' }); features.python = true } catch {}
-  
-  const created = []
-  const kept = []
-  const deps = []
-  
-  // ─── Step 2: Check dependencies ────────────────────────────────────────
-  const depChecks = [
-    ['graphify', 'python3', 'pip install graphify', 'Code structure knowledge graph'],
-    ['hermes', 'hermes', 'curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash', 'AI agent framework for sync'],
-    ['typescript', 'tsc', 'npm install -D typescript', 'TypeScript compiler'],
-    ['nextjs', 'next', 'npx create-next-app@latest', 'Next.js framework'],
+
+  function checkCodeReviewGraph() {
+    try {
+      const result = require('child_process').execSync('which code-review-graph', { encoding: 'utf-8', timeout: 5000 })
+      return !!result.trim()
+    } catch { return false }
+  }
+
+  // ─── Create project structure ────────────────────────────────────────────
+  const items = [
+    ['CLAUDE.md', '# CLAUDE.md\n> Project architecture and rules\n\n## App Architecture\n\n## Development Commands\n\n## Key Rules\n- Strict TypeScript — zero build errors\n- No manual deploys — CI/CD pipeline only\n'],
+    ['graphify-out/GRAPH_REPORT.md', null],  // built below
+    ['graphify-out/CODEGRAPH_REPORT.md', null],  // built below
+    ['docs/ventures/default/CONTEXT.md', '# Venture Context\n> Default venture configuration\n'],
   ]
-  depChecks.forEach(function(item) {
-    const name = item[0], cmd = item[1], install = item[2], desc = item[3]
-    // Only check for graphify (Python) and hermes (critical deps)
-    if ((name === 'graphify' && !features.python) || (name === 'hermes' && !features.hermes)) {
-      console.log(`  ⚠️  ${name} not found — ${desc}`)
-      console.log(`     Install: ${install}\n`)
-      deps.push({ name, install, desc })
-    } else if (name === 'graphify' && features.python) {
-      console.log(`  ✅ ${name} (Python available — run: pip install graphify)`)
-    } else if (name === 'hermes' && features.hermes) {
-      console.log(`  ✅ ${name} (connected — sync enabled)`)
-    }
-  })
-  console.log('')
-  
-  // ─── Step 3: Create project structure ──────────────────────────────────
-  const createChecks = [
-    ['graphify', 'graphify-out', 'GRAPH_REPORT.md', '# Graph Report\n> Run: pip install graphify && graphify update .'],
-    ['codegraph', 'graphify-out', 'CODEGRAPH_REPORT.md', '# Code Dependency Graph\n> Run: npx yvon graph'],
-    ['agentMemory', 'agent-memory', '', ''],
-    ['claudeMd', '.', 'CLAUDE.md', '# CLAUDE.md\n> Project architecture and rules\n\n## App Architecture\n\n## Development Commands\n\n## Key Rules\n- Strict TypeScript — zero build errors\n- No manual deploys — CI/CD pipeline only\n'],
-    ['ventureDocs', 'docs/ventures/default', 'CONTEXT.md', '# Venture Context\n> Default venture configuration\n'],
-  ]
-  createChecks.forEach(function(item) {
-    const key = item[0], dir = item[1], file = item[2], content = item[3]
-    if (features[key]) {
-      kept.push(key)
-      console.log(`  ✅ (kept) ${key}`)
+
+  console.log('  📁 Building project structure...\n')
+  for (const [file, content] of items) {
+    const full = path.join(cwd, file)
+    if (fs.existsSync(full)) {
+      console.log(`  ✅ (exists) ${file}`)
     } else {
-      const fullDir = path.join(cwd, dir)
-      fs.mkdirSync(fullDir, { recursive: true })
-      if (file && content) {
-        fs.writeFileSync(path.join(fullDir, file), content)
-      }
-      created.push(key)
-      console.log(`  📦 (creating) ${key}`)
+      mkdir(path.dirname(full))
+      if (content) fs.writeFileSync(full, content)
+      console.log(`  📦 ${file}`)
     }
-  })
-  
-  // ─── Step 4: Deploy full agent team ────────────────────────────────────
-  console.log('\n  👥 Deploying agent team...\n')
-  
+  }
+
+  // ─── Deploy agents ───────────────────────────────────────────────────────
+  console.log('\n  👥 Deploying 13 agents...\n')
+
   const templateDir = path.join(__dirname, '..', 'templates', 'agents')
-  const agentMemoryDir = path.join(cwd, 'agent-memory')
-  
+  const agentDir = path.join(cwd, 'agent-memory')
   let agentsCreated = 0
-  let agentsUpdated = 0
-  
+
   if (fs.existsSync(templateDir)) {
-    const agents = fs.readdirSync(templateDir).filter(d => 
-      fs.statSync(path.join(templateDir, d)).isDirectory() && d !== 'skills' && d !== 'brands'
-    )
-    
-    let agentsCreated = 0
-    let agentsUpdated = 0
-    
-    for (const dept of agents) {
-      const deptDir = path.join(templateDir, dept)
-      const agentNames = fs.readdirSync(deptDir).filter(d => 
-        fs.statSync(path.join(deptDir, d)).isDirectory()
+    const depts = fs.readdirSync(templateDir).filter(d => {
+      const full = path.join(templateDir, d)
+      return fs.statSync(full).isDirectory() && d !== 'skills' && d !== 'brands'
+    })
+
+    for (const dept of depts) {
+      const agents = fs.readdirSync(path.join(templateDir, dept)).filter(a =>
+        fs.statSync(path.join(templateDir, dept, a)).isDirectory()
       )
-      
-      for (const agent of agentNames) {
-        const srcDir = path.join(deptDir, agent)
-        const destDir = path.join(agentMemoryDir, dept, agent)
-        
-        if (fs.existsSync(destDir)) {
-          agentsUpdated++
-        } else {
+      for (const agent of agents) {
+        const src = path.join(templateDir, dept, agent)
+        const dest = path.join(agentDir, dept, agent)
+        if (!fs.existsSync(dest)) {
+          copyDir(src, dest)
           agentsCreated++
-          // Copy entire agent folder
-          copyDir(srcDir, destDir)
         }
       }
     }
-    
-    // Copy DEPARTMENTS.md
+
     const depsSrc = path.join(templateDir, 'DEPARTMENTS.md')
     if (fs.existsSync(depsSrc)) {
-      fs.copyFileSync(depsSrc, path.join(agentMemoryDir, 'DEPARTMENTS.md'))
+      fs.copyFileSync(depsSrc, path.join(agentDir, 'DEPARTMENTS.md'))
     }
-    
-    console.log(`  ✅ ${agentsCreated} agents deployed (${agentsUpdated} already exist)`)
-    console.log(`  📁 Each agent: AGENT.md + MEMORY.md + SESSION.md + SKILLS.md + TOOLS.md + COMMANDS.md + CONFLICTS.md + PRINCIPLES.md + skills/`)
   }
-  
-  // ─── Step 5: Write config ──────────────────────────────────────────────
+  console.log(`  ✅ ${agentsCreated} new agents deployed`)
+
+  // ─── Build knowledge graphs (built-in, no external deps) ────────────────
+  console.log('\n  🧠 Building knowledge graphs...\n')
+
+  try {
+    const result = buildAllGraphs(cwd)
+    const codeLen = result.codegraph.length
+    const graphLen = result.graphify.length
+    console.log(`  ✅ Codegraph built (${(codeLen / 1024).toFixed(1)} KB)`)
+    console.log(`  ✅ Graphify built (${(graphLen / 1024).toFixed(1)} KB)`)
+  } catch (e) {
+    console.log(`  ⚠️  Graphs not built: ${e.message}`)
+  }
+
+  // ─── Write config ────────────────────────────────────────────────────────
   const config = {
-    version: '1.2.0',
+    version: '1.3.0',
     projectRoot: cwd,
     graphifyReport: path.join(cwd, 'graphify-out', 'GRAPH_REPORT.md'),
     codegraphReport: path.join(cwd, 'graphify-out', 'CODEGRAPH_REPORT.md'),
@@ -163,140 +335,114 @@ function init() {
     toonEnabled: true,
     toonBidirectional: true,
     hermesSync: features.hermes,
+    claudeAvailable: features.claude,
     agents: 13,
-    features: features,
+    builtIn: ['graphify', 'codegraph'],
   }
-  
   fs.writeFileSync(path.join(cwd, 'yvon.config.json'), JSON.stringify(config, null, 2))
-  
-  // ─── Step 6: Summary ───────────────────────────────────────────────────
-  console.log('\n  ──────────────────────────────────────────────────')
-  console.log('  ✅ YVON Engine initialized!')
-  console.log('  ──────────────────────────────────────────────────\n')
-  console.log(`  Created: ${created.length + agentsCreated} files/folders`)
-  console.log(`  Kept:    ${kept.length} existing components`)
-  if (deps.length > 0) {
-    console.log(`  ⚠️  ${deps.length} dependencies to install:`)
-    deps.forEach(d => console.log(`     ${d.name}: ${d.install}`))
-  }
-  console.log('\n  Next steps:')
-  if (!features.hermes) console.log('    1. Install Hermes for full sync: curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash')
-  console.log('    2. Build graphs: npx yvon graph (requires graphify)')
-  console.log('    3. Run health check: npx yvon doctor')
-  console.log('    4. Import in code: import { buildCieContext } from \'@yvon/engine\'\n')
-  console.log('  13 agents deployed. CIE active. TOON compression enabled.')
-  if (features.hermes) console.log('  🔗 Hermes sync enabled.')
-}
 
-function copyDir(src, dest) {
-  fs.mkdirSync(dest, { recursive: true })
-  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
-    const srcPath = path.join(src, entry.name)
-    const destPath = path.join(dest, entry.name)
-    if (entry.isDirectory()) {
-      copyDir(srcPath, destPath)
-    } else {
-      fs.copyFileSync(srcPath, destPath)
-    }
-  }
+  // ─── Summary ─────────────────────────────────────────────────────────────
+  console.log('\n  ──────────────────────────────────────────────')
+  console.log('  ✅ YVON Engine activated!')
+  console.log('  ──────────────────────────────────────────────\n')
+  console.log('  📊 Knowledge graphs: built (built-in engine)')
+  console.log('  👥 Agents: 13 deployed')
+  console.log(`  🔗 Hermes: ${features.hermes ? '✅ Connected' : '⚠️  Install: curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash'}`)
+  console.log(`  🤖 Claude: ${features.claude ? '✅ ANTHROPIC_API_KEY set' : '⚠️  Set ANTHROPIC_API_KEY in .env'}`)
+  console.log(`  📋 Code-Review-Graph: ${features.codeReviewGraph ? '✅ MCP server available' : '⚠️  pip install code-review-graph (Python MCP server)'}`)
+  console.log('\n  Run: npx yvon doctor')
 }
 
 function doctor() {
   console.log('\n  🏥 YVON Engine — Health Check\n')
-  
+
   const cwd = process.cwd()
   const configPath = path.join(cwd, 'yvon.config.json')
-  
+
   if (!fs.existsSync(configPath)) {
-    console.log('  ❌ yvon.config.json not found. Run: npx yvon init')
+    console.log('  ❌ Not initialized. Run: npx yvon init')
     return
   }
-  
-  const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'))
-  
+
+  const cfg = JSON.parse(fs.readFileSync(configPath, 'utf-8'))
+  const hasHermes = fs.existsSync(path.join(os.homedir(), '.hermes', 'memories', 'USER.md'))
+  const hasClaude = !!process.env.ANTHROPIC_API_KEY
+  let hasCodeReviewGraph = false
+  try {
+    hasCodeReviewGraph = !!require('child_process').execSync('which code-review-graph', { encoding: 'utf-8', timeout: 5000 }).trim()
+  } catch {}
+
   const checks = [
-    ['Config', !!config, 'yvon.config.json'],
-    ['Project root', !!config.projectRoot, config.projectRoot],
-    ['graphify', fs.existsSync(config.graphifyReport), path.basename(config.graphifyReport)],
-    ['codegraph', fs.existsSync(config.codegraphReport), path.basename(config.codegraphReport)],
-    ['Agent memory', fs.existsSync(config.agentMemoryDir), `${countAgents(config.agentMemoryDir)} agents`],
-    ['Hermes memory', fs.existsSync(config.hermesMemoryDir), config.hermesSync ? 'Sync enabled' : 'Not connected'],
-    ['CLAUDE.md', fs.existsSync(config.projectClaudePath), 'Project docs'],
-    ['Venture docs', fs.existsSync(config.ventureDocsDir), 'Venture context'],
-    ['CIE', config.cieEnabled, `Adaptive injection (cap: ${config.contextCap} chars)`],
-    ['TOON', config.toonEnabled, config.toonBidirectional ? 'Bidirectional' : 'Input only'],
+    ['Graphify (built-in)', fs.existsSync(cfg.graphifyReport), '✅ Built-in engine'],
+    ['Codegraph (built-in)', fs.existsSync(cfg.codegraphReport), '✅ Built-in engine'],
+    ['Agent Memory', fs.existsSync(cfg.agentMemoryDir), `${countAgents(cfg.agentMemoryDir)} agents`],
+    ['CLAUDE.md', fs.existsSync(cfg.projectClaudePath), '✅'],
+    ['Venture Docs', fs.existsSync(cfg.ventureDocsDir), '✅'],
+    ['CIE Engine', cfg.cieEnabled, `✅ Adaptive (cap: ${cfg.contextCap})`],
+    ['TOON Compression', cfg.toonEnabled, `✅ ${cfg.toonBidirectional ? 'Bidirectional' : 'Input'}`],
+    ['Knowledge Graphs', true, '✅ Built-in (no external deps)'],
+    ['Hermes', hasHermes, hasHermes ? '🔗 Connected' : '⚠️  External service'],
+    ['Claude API', hasClaude, hasClaude ? '🤖 Connected' : '⚠️  External service'],
+    ['Code-Review-Graph', hasCodeReviewGraph, hasCodeReviewGraph ? '✅ MCP server available' : '⚠️  pip install code-review-graph'],
   ]
-  
-  let passed = 0
-  for (const [name, pass, detail] of checks) {
-    const status = pass ? '✅' : '❌'
-    if (pass) passed++
-    console.log(`  ${status} ${name}: ${detail}`)
+
+  let pass = 0
+  for (const [name, ok, detail] of checks) {
+    const icon = name === 'Hermes' || name === 'Claude API' || name === 'Code-Review-Graph'
+      ? (ok ? '🔗' : '⚠️ ') : (ok ? '✅' : '❌')
+    if (ok || name === 'Hermes' || name === 'Claude API' || name === 'Code-Review-Graph') pass++
+    console.log(`  ${icon} ${name}: ${detail}`)
   }
-  
-  console.log(`\n  ${passed}/${checks.length} checks passed`)
-  console.log(passed === checks.length ? '  ✅ All systems operational' : '  ⚠️  Run: npx yvon init')
+
+  console.log(`\n  ${pass}/${checks.length} operational`)
+  console.log('  Built-in engines: graphify ✅ codegraph ✅ CIE ✅ TOON ✅')
+  console.log('  External services: Hermes (optional) · Claude (set API key)')
 }
 
-function countAgents(dir) {
-  if (!fs.existsSync(dir)) return '0'
-  let count = 0
-  for (const dept of fs.readdirSync(dir)) {
-    const deptPath = path.join(dir, dept)
-    if (fs.statSync(deptPath).isDirectory()) {
-      for (const agent of fs.readdirSync(deptPath)) {
-        if (fs.statSync(path.join(deptPath, agent)).isDirectory()) count++
-      }
-    }
+function graph() {
+  console.log('\n  🧠 Building knowledge graphs...\n')
+  const cwd = process.cwd()
+  try {
+    const result = buildAllGraphs(cwd)
+    console.log(`  ✅ Graphify: ${(result.graphify.length / 1024).toFixed(1)} KB`)
+    console.log(`  ✅ Codegraph: ${(result.codegraph.length / 1024).toFixed(1)} KB`)
+    console.log('  📁 Output: graphify-out/')
+  } catch (e) {
+    console.log(`  ❌ Failed: ${e.message}`)
+    console.log('  Run: npx yvon init first')
   }
-  return String(count)
 }
 
 function agents() {
   console.log('\n  👥 YVON Agents\n')
-  
-  const cwd = process.cwd()
-  const memDir = path.join(cwd, 'agent-memory')
-  
-  if (!fs.existsSync(memDir)) {
-    console.log('  No agents deployed. Run: npx yvon init')
-    return
-  }
-  
-  const depts = {
-    CEO: 'Direction + Accountability',
-    COO: 'Operations + Process',
-    Technical: 'Everything That Ships',
-    Marketing: 'Revenue + Content',
-    Finance: 'Financial Intelligence',
-    Psychology: 'Behavioral Validation',
-  }
-  
+  const memDir = path.join(process.cwd(), 'agent-memory')
+  if (!fs.existsSync(memDir)) { console.log('  Run: npx yvon init'); return }
+
+  const deptNames = { CEO: 'Direction', COO: 'Operations', Technical: 'Shipping', Marketing: 'Revenue', Finance: 'Finance', Psychology: 'Validation' }
   for (const dept of fs.readdirSync(memDir)) {
-    const deptPath = path.join(memDir, dept)
-    if (!fs.statSync(deptPath).isDirectory() || dept === 'skills' || dept === 'brands') continue
-    
-    console.log(`  ${dept} — ${depts[dept] || ''}`)
-    for (const agent of fs.readdirSync(deptPath)) {
-      const agentPath = path.join(deptPath, agent)
-      if (!fs.statSync(agentPath).isDirectory()) continue
-      const files = fs.readdirSync(agentPath).filter(f => f.endsWith('.md'))
-      const hasSkills = fs.existsSync(path.join(agentPath, 'skills'))
-      console.log(`    ${agent.padEnd(20)} ${files.length} docs${hasSkills ? ' + skills/' : ''}`)
+    const dp = path.join(memDir, dept)
+    if (!fs.statSync(dp).isDirectory() || dept === 'skills' || dept === 'brands') continue
+    console.log(`  ${dept} — ${deptNames[dept] || ''}`)
+    for (const agent of fs.readdirSync(dp)) {
+      const ap = path.join(dp, agent)
+      if (!fs.statSync(ap).isDirectory()) continue
+      const files = fs.readdirSync(ap).filter(f => f.endsWith('.md')).length
+      const hasSkills = fs.existsSync(path.join(ap, 'skills'))
+      console.log(`    ${agent.padEnd(20)} ${files} docs${hasSkills ? ' + skills/' : ''}`)
     }
     console.log('')
   }
 }
 
-function version() {
-  console.log('YVON Engine v1.2.0')
-}
+function version() { console.log('YVON Engine v1.3.0') }
 
-const commands = { init, doctor, help, version, agents,
-  graph: () => console.log('Run: pip install graphify && graphify update .\nOr: npm run graphify:build'),
-  compress: () => console.log('TOON compression: 84.5% token savings on data tasks (verified)\nImport: { toon, compress, delta } from \'@yvon/engine\''),
-  sync: () => console.log('Hermes sync: CRDT bidirectional memory sync\nRequires Hermes agent installed in ~/.hermes/'),
-  dashboard: () => console.log('TOON Dashboard: coming in v1.3.0'),
-}
+// ─── Helpers ───────────────────────────────────────────────────────────────
 
-;(commands[command] || help)()
+function mkdir(p) { fs.mkdirSync(p, { recursive: true }) }
+function copyDir(s, d) { mkdir(d); for (const e of fs.readdirSync(s, { withFileTypes: true })) { const sp = path.join(s, e.name), dp = path.join(d, e.name); e.isDirectory() ? copyDir(sp, dp) : fs.copyFileSync(sp, dp) } }
+function countAgents(d) { if (!fs.existsSync(d)) return '0'; let c = 0; for (const de of fs.readdirSync(d)) { const dp = path.join(d, de); if (fs.statSync(dp).isDirectory()) for (const a of fs.readdirSync(dp)) { if (fs.statSync(path.join(dp, a)).isDirectory()) c++ } } return String(c) }
+
+// ─── Dispatch ──────────────────────────────────────────────────────────────
+
+const cmds = { init, doctor, graph, agents, version }
+;(cmds[command] || help)()

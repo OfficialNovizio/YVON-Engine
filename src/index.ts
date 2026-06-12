@@ -33,6 +33,11 @@ export { BloomFilter, TfidfIndex, ContextPriorityQueue, blastRadius, minhashSign
 export { getConfig, invalidateConfig } from './adapters/config'
 export type { EngineConfig } from './adapters/config'
 
+// ─── MCP ──────────────────────────────────────────────────────────────────────
+
+export { createMCPClient } from './adapters/mcp-client'
+export type { MCPClient } from './adapters/mcp-client'
+
 // ─── Engine creator ───────────────────────────────────────────────────────────
 
 export interface EngineOptions {
