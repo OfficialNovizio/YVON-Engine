@@ -22,11 +22,11 @@ export type { CieContext, CieParams, TaskProfile, TaskType } from './cie'
 
 export { toon } from './toon/toon'
 export { compress, buildDictionary, dictToLine } from './toon/compressor'
-export { createDeltaTracker, getDelta } from './toon/delta'
+export { getOrCreateState, computeDelta } from './toon/delta'
 
 // ─── Algorithms ───────────────────────────────────────────────────────────────
 
-export { BloomFilter, MinHash, TfidfIndex, ContextPriorityQueue, blastRadius } from './cie/algorithms'
+export { BloomFilter, TfidfIndex, ContextPriorityQueue, blastRadius, minhashSignature, jaccardEstimate } from './cie/algorithms'
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
