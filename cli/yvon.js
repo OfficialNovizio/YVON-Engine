@@ -532,6 +532,77 @@ function integrate() {
   console.log('\n  🔍 Scanning project for YVON imports...\n')
   scanDir(cwd)
   
+  // ── Step 3.5: Inject CIE into Claude route if missing ────────────────────
+  const claudeRoute = path.join(cwd, 'app', 'api', 'claude', 'route.ts')
+  const altRoute = path.join(cwd, 'app', 'api', 'claude', 'route.tsx')
+  const routePath = fs.existsSync(claudeRoute) ? claudeRoute : (fs.existsSync(altRoute) ? altRoute : null)
+  
+  if (routePath) {
+    let routeContent = fs.readFileSync(routePath, 'utf-8')
+    const hasCie = routeContent.includes('buildCieContext') || routeContent.includes('@yvon/engine/cie')
+    
+    if (!hasCie) {
+      // Insert import after the last @anthropic-ai or @/lib import
+      const importInsertRe = /(import\s+.+from\s+['"]@(anthropic|supabase|\/).+['"]\s*\n)(?!\s*import)/g
+      const importInsert = `import { buildCieContext } from '@yvon/engine/cie'\n`
+      
+      let injected = false
+      routeContent = routeContent.replace(importInsertRe, (match) => {
+        injected = true
+        return match + importInsert
+      })
+      
+      // Fallback: insert after 'use server' or first line
+      if (!injected) {
+        routeContent = routeContent.replace(
+          /(['"]use server['"]\s*;?\s*\n)/,
+          '$1' + importInsert
+        )
+      }
+      
+      // Inject CIE block before the dataBlock section (or before the stream call)
+      const cieBlock = `
+  // ─── CIE INJECTION (Context Intelligence Engine) ──────────────────────────
+  let finalDataBlock = dataBlock ?? ''
+  let userMessageFinal: string = userMessage as string
+  if (agentId) {
+    try {
+      const cie = buildCieContext({
+        agentId,
+        task: String(userMessage).slice(0, 1000),
+        venture: ventureId ?? 'yvon-dashboard',
+      })
+      if (cie.systemExtension) {
+        effectiveSystemPrompt = (effectiveSystemPrompt ?? '') + '\\n\\n' + cie.systemExtension
+      }
+      if (cie.dataBlock) {
+        finalDataBlock = (finalDataBlock ? finalDataBlock + '\\n' : '') + cie.dataBlock
+      }
+    } catch {
+      // CIE is non-blocking — agent call proceeds without it on failure
+    }
+  }
+`
+      // Insert before the dataBlock check
+      const insertedCie = routeContent.includes('// ─── CIE INJECTION')
+      if (!insertedCie) {
+        routeContent = routeContent.replace(
+          /(\/\/ Append TOON-formatted data block|\/\/ Append data block|if\s*\(\s*dataBlock\s*\))/,
+          cieBlock + '\n  $1'
+        )
+      }
+      
+      // Replace dataBlock references with finalDataBlock
+      if (routeContent.includes('finalDataBlock') && !routeContent.includes('dataBlock')) {
+        routeContent = routeContent.replace(/\bdataBlock\b(?!\s*['"])/g, 'finalDataBlock')
+      }
+      
+      fs.writeFileSync(routePath, routeContent, 'utf-8')
+      stats.patched++
+      console.log(`  ✅ ${path.relative(cwd, routePath)} — CIE injected`)
+    }
+  }
+  
   // ── Step 4: Summary ──────────────────────────────────────────────────────
   console.log(`\n  📊 ${stats.scanned} files scanned`)
   if (stats.patched > 0) {
