@@ -24,3 +24,11 @@ export type { EngineData, EngineContext, MatchResult, SessionDelta, V3Engine, Ch
 export { stem } from './v3/stemmer'
 export { trainBPE, encode as bpeEncode, decode as bpeDecode } from './v3/bpe'
 export type { BPETable } from './v3/bpe'
+
+// ─── v3 Resolver + Sync ─────────────────────────────────────────────────────
+export { resolve, resolveMany, clearResolveCache, resolverStats } from './v3/resolver'
+export type { ResolveResult, ReadMode } from './v3/resolver'
+export { writeFile, deleteFile, writeMany } from './v3/sync-writer'
+export type { WriteTarget, WriteResult } from './v3/sync-writer'
+export { readDoc, readDocsForLLM, readDocForHuman, getToonPath, getHumanPath, docStats } from './v3/dual-docs'
+export type { DualDocStats } from './v3/dual-docs'

@@ -219,17 +219,23 @@ function buildAllGraphs(rootDir) {
 
 function help() {
   console.log(`
-YVON Engine CLI v1.3.0
+YVON Engine CLI v1.5.0
 
   yvon init          One command to activate everything (new projects)
   yvon integrate     Wire engine into an existing project (safe, non-destructive)
   yvon doctor        Health check (all ✅ except external services)
-  yvon graph         Rebuild knowledge graphs
+  yvon graph         Rebuild knowledge graphs → absorb into .toon/graphs/
   yvon agents        List all 13 agents
   yvon dashboard     Open live dashboard (port 4200)
-  yvon dashboard --hide     Hide dashboard from settings
-  yvon dashboard --show     Show dashboard in settings
-  yvon dashboard --status   Show current config
+  yvon dashboard --hide / --show / --status
+  yvon absorb        Migrate originals → .toon/ (safe, with rollback)
+  yvon absorb --dry-run   Preview what would move
+  yvon rollback      List available rollback snapshots
+  yvon rollback <ts> Restore from specific snapshot
+  yvon sync --once   One-time sync: originals → .toon/
+  yvon sync --watch  Auto-sync every 30s
+  yvon clean         Remove stale duplicates + reindex engine.bin
+  yvon stats         Show dual-doc compression stats
   yvon version       Show version
 `)
 }
@@ -672,8 +678,95 @@ function countAgents(d) { if (!fs.existsSync(d)) return '0'; let c = 0; for (con
 
 // ─── Dispatch ──────────────────────────────────────────────────────────────
 
-const cmds = { init, doctor, graph, agents, dashboard, integrate, version }
+const cmds = { init, doctor, graph, agents, dashboard, integrate, absorb, rollback, sync, clean, stats, version }
 ;(cmds[command] || help)()
+
+// ── absorb ──────────────────────────────────────────────────────────────────
+function absorb() {
+  const flag = process.argv[3]
+  const { execSync } = require('child_process')
+  const toolPath = path.join(__dirname, '..', 'tools', 'yvon-absorb')
+  if (!fs.existsSync(toolPath)) {
+    console.log('  ⚠️  Tool not found — update yvon-engine to v1.5.0+')
+    return
+  }
+  const dry = flag === '--dry-run' ? '--dry-run' : ''
+  try {
+    execSync(`bash "${toolPath}" "${process.cwd()}" ${dry}`, { stdio: 'inherit' })
+  } catch (e) {
+    console.log('  ⚠️  Absorb failed — check yvon doctor first')
+  }
+}
+
+// ── rollback ────────────────────────────────────────────────────────────────
+function rollback() {
+  const ts = process.argv[3] || ''
+  const { execSync } = require('child_process')
+  const toolPath = path.join(__dirname, '..', 'tools', 'yvon-rollback')
+  if (!fs.existsSync(toolPath)) {
+    console.log('  ⚠️  Tool not found — update yvon-engine to v1.5.0+')
+    return
+  }
+  try {
+    execSync(`bash "${toolPath}" "${process.cwd()}" ${ts}`, { stdio: 'inherit' })
+  } catch (e) {
+    console.log('  ⚠️  Rollback failed')
+  }
+}
+
+// ── sync ────────────────────────────────────────────────────────────────────
+function sync() {
+  const flag = process.argv[3] || '--once'
+  const { execSync } = require('child_process')
+  const toolPath = path.join(__dirname, '..', 'tools', 'yvon-sync')
+  if (!fs.existsSync(toolPath)) {
+    console.log('  ⚠️  Tool not found — update yvon-engine to v1.5.0+')
+    return
+  }
+  try {
+    execSync(`bash "${toolPath}" "${process.cwd()}" ${flag}`, { stdio: 'inherit' })
+  } catch (e) {
+    console.log('  ⚠️  Sync failed')
+  }
+}
+
+// ── clean ───────────────────────────────────────────────────────────────────
+function clean() {
+  const { execSync } = require('child_process')
+  const toolPath = path.join(__dirname, '..', 'tools', 'yvon-clean')
+  if (!fs.existsSync(toolPath)) {
+    console.log('  ⚠️  Tool not found — update yvon-engine to v1.5.0+')
+    return
+  }
+  try {
+    execSync(`bash "${toolPath}" "${process.cwd()}"`, { stdio: 'inherit' })
+  } catch (e) {
+    console.log('  ⚠️  Clean failed')
+  }
+}
+
+// ── stats ───────────────────────────────────────────────────────────────────
+function stats() {
+  console.log('\n  📊 YVON Engine — Dual-Doc Stats\n')
+  try {
+    const { docStats } = require('../dist/toon/v3/dual-docs')
+    const s = docStats(process.cwd())
+    console.log(`  Total docs:       ${s.totalDocs}`)
+    console.log(`  Human-readable:   ${(s.totalHumanSize / 1024).toFixed(1)} KB`)
+    console.log(`  LLM-optimized:    ${(s.totalToonSize / 1024).toFixed(1)} KB`)
+    console.log(`  Savings:          ${s.savingsPercent}%`)
+    console.log('')
+    console.log('  Breakdown:')
+    console.log(`    Agent memory:   ${s.breakdown.agentMemory.count} docs, ${(s.breakdown.agentMemory.humanSize/1024).toFixed(1)}KB → ${(s.breakdown.agentMemory.toonSize/1024).toFixed(1)}KB`)
+    console.log(`    Docs:           ${s.breakdown.docs.count} docs, ${(s.breakdown.docs.humanSize/1024).toFixed(1)}KB → ${(s.breakdown.docs.toonSize/1024).toFixed(1)}KB`)
+    console.log(`    Graphs:         ${s.breakdown.graphs.count} docs, ${(s.breakdown.graphs.humanSize/1024).toFixed(1)}KB → ${(s.breakdown.graphs.toonSize/1024).toFixed(1)}KB`)
+    console.log(`    Project:        ${s.breakdown.project.count} docs, ${(s.breakdown.project.humanSize/1024).toFixed(1)}KB → ${(s.breakdown.project.toonSize/1024).toFixed(1)}KB`)
+    console.log('')
+  } catch (e) {
+    console.log(`  ⚠️  Stats unavailable: ${e.message}`)
+    console.log('  Run: npm install yvon-engine@latest\n')
+  }
+}
 
 function dashboard() {
   const flag = process.argv[3]

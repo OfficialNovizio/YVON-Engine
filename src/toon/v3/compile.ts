@@ -31,11 +31,29 @@ export function compile(options: CompileOptions): CompileResult {
   const root = options.projectRoot
   const outPath = options.outPath || join(root, '.toon', 'v3', 'engine.bin')
 
-  // 1. Collect all documents and memories
+  // 1. Collect all documents, memories, graphs, project configs
   const docs = collectFiles(join(root, 'docs'), '.md')
   const mems = [
     ...collectFiles(join(root, 'agent-department'), '.md').filter(f => f.includes('MEMORY') || f.includes('AGENT')),
     ...collectFiles(join(root, 'agent-memory'), '.md').filter(f => f.includes('MEMORY') || f.includes('AGENT')),
+  ]
+  const graphs = collectFiles(join(root, 'graphify-out'), '.md')
+  const graphJson = collectFiles(join(root, 'graphify-out'), '.json')
+  const claudeMd = existsSync(join(root, 'CLAUDE.md')) ? [join(root, 'CLAUDE.md')] : []
+  const supabaseMigrations = collectFiles(join(root, 'supabase'), '.sql')
+  const scriptsDir = collectFiles(join(root, 'scripts'), '.mjs')
+  const envTemplate = existsSync(join(root, '.env.example')) ? [join(root, '.env.example')] : []
+  
+  // Also scan .toon/ directories if originals absorbed
+  const toonDocs = collectFiles(join(root, '.toon', 'docs'), '.toon')
+  const toonMemory = collectFiles(join(root, '.toon', 'memory'), '.toon')
+  const toonGraphs = collectFiles(join(root, '.toon', 'graphs'), '.toon')
+  const toonProject = existsSync(join(root, '.toon', 'project', 'CLAUDE.md')) ? [join(root, '.toon', 'project', 'CLAUDE.md')] : []
+
+  const allFiles = [
+    ...docs, ...mems, ...graphs, ...graphJson, ...claudeMd,
+    ...supabaseMigrations, ...scriptsDir, ...envTemplate,
+    ...toonDocs, ...toonMemory, ...toonGraphs, ...toonProject,
   ]
 
   // 2. Strip + chunk all files
@@ -44,7 +62,7 @@ export function compile(options: CompileOptions): CompileResult {
   const allText: string[] = []
   let chunkId = 0
 
-  for (const file of [...docs, ...mems]) {
+  for (const file of allFiles) {
     if (!existsSync(file)) continue
     const content = readFileSync(file, 'utf-8')
     const stripped = strip(content)
@@ -117,7 +135,7 @@ export function compile(options: CompileOptions): CompileResult {
 
   return {
     path: outPath,
-    docCount: docs.length + mems.length,
+    docCount: allFiles.length,
     chunkCount: allChunks.length,
     corpusSize: corpus.length,
     bpeTokens: Number((bpeTable.vocab as Map<string,string>).size) || 0,

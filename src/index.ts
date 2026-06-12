@@ -79,6 +79,12 @@ export type { EngineData, EngineContext, MatchResult, SessionDelta, V3Engine, Ch
 export { stem } from './toon/v3/stemmer'
 export { trainBPE, encode as bpeEncode, decode as bpeDecode } from './toon/v3/bpe'
 export type { BPETable } from './toon/v3/bpe'
+export { resolve, resolveMany, clearResolveCache, resolverStats } from './toon/v3/resolver'
+export type { ResolveResult, ReadMode } from './toon/v3/resolver'
+export { writeFile, deleteFile, writeMany } from './toon/v3/sync-writer'
+export type { WriteTarget, WriteResult } from './toon/v3/sync-writer'
+export { readDoc, readDocsForLLM, readDocForHuman, getToonPath, getHumanPath, docStats } from './toon/v3/dual-docs'
+export type { DualDocStats } from './toon/v3/dual-docs'
 
 // ─── Hermes ────────────────────────────────────────────────────────────────────
 
