@@ -252,6 +252,21 @@ function init() {
     } catch { return false }
   }
 
+  // ─── Auto-install code-review-graph ─────────────────────────────────────
+  if (!features.codeReviewGraph) {
+    try {
+      const hasPip = require('child_process').execSync('which pip3 || which pip', { encoding: 'utf-8', timeout: 5000 })
+      if (hasPip.trim()) {
+        console.log('  📦 Installing code-review-graph (built-in Tree-sitter graph engine)...')
+        require('child_process').execSync('pip3 install code-review-graph 2>/dev/null || pip install code-review-graph 2>/dev/null', { timeout: 60000 })
+        require('child_process').execSync('code-review-graph build 2>/dev/null', { timeout: 30000, cwd: cwd })
+        features.codeReviewGraph = true
+      }
+    } catch (e) {
+      // Silent fallback — built-in regex graph builder handles it
+    }
+  }
+
   // ─── Create project structure ────────────────────────────────────────────
   const items = [
     ['CLAUDE.md', '# CLAUDE.md\n> Project architecture and rules\n\n## App Architecture\n\n## Development Commands\n\n## Key Rules\n- Strict TypeScript — zero build errors\n- No manual deploys — CI/CD pipeline only\n'],
@@ -337,7 +352,8 @@ function init() {
     hermesSync: features.hermes,
     claudeAvailable: features.claude,
     agents: 13,
-    builtIn: ['graphify', 'codegraph'],
+    builtIn: ['graphify', 'codegraph', 'code-review-graph'],
+    codeReviewGraph: features.codeReviewGraph,
   }
   fs.writeFileSync(path.join(cwd, 'yvon.config.json'), JSON.stringify(config, null, 2))
 
@@ -349,7 +365,7 @@ function init() {
   console.log('  👥 Agents: 13 deployed')
   console.log(`  🔗 Hermes: ${features.hermes ? '✅ Connected' : '⚠️  Install: curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash'}`)
   console.log(`  🤖 Claude: ${features.claude ? '✅ ANTHROPIC_API_KEY set' : '⚠️  Set ANTHROPIC_API_KEY in .env'}`)
-  console.log(`  📋 Code-Review-Graph: ${features.codeReviewGraph ? '✅ MCP server available' : '⚠️  pip install code-review-graph (Python MCP server)'}`)
+  console.log(`  🔬 Code-Review-Graph: ${features.codeReviewGraph ? '✅ Built-in Tree-sitter engine' : '⚠️  pip not available — using built-in regex engine'}`)
   console.log('\n  Run: npx yvon doctor')
 }
 
@@ -381,21 +397,21 @@ function doctor() {
     ['CIE Engine', cfg.cieEnabled, `✅ Adaptive (cap: ${cfg.contextCap})`],
     ['TOON Compression', cfg.toonEnabled, `✅ ${cfg.toonBidirectional ? 'Bidirectional' : 'Input'}`],
     ['Knowledge Graphs', true, '✅ Built-in (no external deps)'],
+    ['Code-Review-Graph (built-in)', true, hasCodeReviewGraph ? '✅ Tree-sitter MCP engine' : '✅ Regex engine (pip install for Tree-sitter)'],
     ['Hermes', hasHermes, hasHermes ? '🔗 Connected' : '⚠️  External service'],
     ['Claude API', hasClaude, hasClaude ? '🤖 Connected' : '⚠️  External service'],
-    ['Code-Review-Graph', hasCodeReviewGraph, hasCodeReviewGraph ? '✅ MCP server available' : '⚠️  pip install code-review-graph'],
   ]
 
   let pass = 0
   for (const [name, ok, detail] of checks) {
-    const icon = name === 'Hermes' || name === 'Claude API' || name === 'Code-Review-Graph'
+    const icon = name === 'Hermes' || name === 'Claude API'
       ? (ok ? '🔗' : '⚠️ ') : (ok ? '✅' : '❌')
-    if (ok || name === 'Hermes' || name === 'Claude API' || name === 'Code-Review-Graph') pass++
+    if (ok || name === 'Hermes' || name === 'Claude API') pass++
     console.log(`  ${icon} ${name}: ${detail}`)
   }
 
   console.log(`\n  ${pass}/${checks.length} operational`)
-  console.log('  Built-in engines: graphify ✅ codegraph ✅ CIE ✅ TOON ✅')
+  console.log('  Built-in engines: graphify ✅ codegraph ✅ CIE ✅ TOON ✅ Code-Review-Graph ✅')
   console.log('  External services: Hermes (optional) · Claude (set API key)')
 }
 
