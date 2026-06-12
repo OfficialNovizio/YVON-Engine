@@ -74,6 +74,20 @@ function compile(options) {
         // Build doc tree (H1/H2 headings only)
         const treeLines = [];
         const chunks = chunkDocument(stripped.output, docId, chunkId);
+        // Fallback: files without markdown headings (Hermes memories, JSON, etc.)
+        if (chunks.length === 0 && stripped.output.trim().length > 0) {
+            const heading = docId.split('/').pop() || docId;
+            chunks.push({
+                id: chunkId,
+                docId,
+                level: 1,
+                heading,
+                body: stripped.output.trim().substring(0, 2000), // cap at 2000 chars
+                keywords: [],
+                bigrams: [],
+                hash: '',
+            });
+        }
         for (const c of chunks) {
             if (c.level <= 2)
                 treeLines.push(`${'#'.repeat(c.level)} ${c.heading}`);
