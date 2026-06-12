@@ -512,23 +512,9 @@ function integrate() {
         }
         
         if (changed) {
-          // Only replace if the engine export exists
-          let safe = true
-          for (const enginePath of Object.values(replacements)) {
-            if (content.includes(enginePath)) {
-              // Verify the engine module exists
-              const modParts = enginePath.split('/')
-              const modFile = path.join(enginePath, 'dist', modParts.slice(1).join('/'), 'index.js')
-              const altFile = path.join(enginePath, 'dist', modParts.slice(1).join('/') + '.js')
-              if (!fs.existsSync(modFile) && !fs.existsSync(altFile)) {
-                // Module might not exist, check main entry
-                const mainFile = path.join(enginePath, 'dist', 'index.js')
-                if (!fs.existsSync(mainFile)) {
-                  safe = false
-                }
-              }
-            }
-          }
+          // Verify the engine main entry exists on disk before patching
+          const mainEntry = path.join(enginePath, 'dist', 'index.js')
+          const safe = fs.existsSync(mainEntry)
           
           if (safe) {
             fs.writeFileSync(full, content, 'utf-8')
