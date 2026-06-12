@@ -154,10 +154,11 @@ function createEngine(binPath) {
     }
     function buildSystemPrompt(basePrompt, docMatches, agentId) {
         const parts = [];
-        // Hermes USER preferences — ALWAYS injected (the persistent brain)
-        const hermesUser = docMatches.filter(m => m.chunk.docId.includes('hermes/memories/USER'));
-        if (hermesUser.length > 0) {
-            parts.push('[HERMES AGENT — PERSISTENT PREFERENCES]\n' + hermesUser.map(m => m.text).join('\n'));
+        const data = load();
+        // Hermes USER preferences — ALWAYS injected (the persistent identity)
+        const userChunk = data?.chunks?.find((c) => c.docId === 'hermes/memories/USER');
+        if (userChunk) {
+            parts.push('[HERMES AGENT — PERSISTENT IDENTITY]\n## USER\n' + userChunk.body.slice(0, 400));
         }
         // Hermes MEMORY — always injected if matched
         const hermesMemory = docMatches.filter(m => m.chunk.docId.includes('hermes/memories/MEMORY'));
