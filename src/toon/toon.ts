@@ -14,6 +14,24 @@
 //   const compact = toon.claude(decisions, 'decision')
 //   const parsed  = toon.parse(compact)
 
+import { metrics } from '../metrics/collector'
+
+// ─── Metrics tracking helper ─────────────────────────────────────────────────
+function trackToon(format: string, input: string, output: string, model?: string): void {
+  if (!metrics.isEnabled()) return
+  const savings = Math.max(0, input.length - output.length)
+  metrics.recordToonCall({
+    timestamp: Date.now(),
+    model: model || 'default',
+    format: format as any,
+    inputTokens: Math.ceil(input.length / 4),
+    outputTokens: Math.ceil(output.length / 4),
+    bytesBefore: input.length,
+    bytesAfter: output.length,
+    costSaved: savings * 0.00000015, // ~$0.15 per MB of savings
+  })
+}
+
 // ─── Schema definitions ──────────────────────────────────────────────────────
 export interface ToonField {
   name: string        // full field name
@@ -290,3 +308,40 @@ export const toon = {
 }
 
 export default toon
+
+// ─── Metrics-wrapped exports ──────────────────────────────────────────────────
+// Each compression method records a ToonCall when metrics are enabled.
+// Zero overhead when dashboard is off (one boolean check per call).
+
+const _claude = toon.claude
+const _dense = toon.dense
+const _api = toon.api
+const _js = toon.js
+
+toon.claude = function(items: Record<string, unknown>[], schemaOrType: ToonSchema | string): string {
+  const raw = JSON.stringify(items)
+  const result = _claude.call(this, items, schemaOrType)
+  trackToon('claude', raw, result)
+  return result
+}
+
+toon.dense = function(items: Record<string, unknown>[], schemaOrType: ToonSchema | string): string {
+  const raw = JSON.stringify(items)
+  const result = _dense.call(this, items, schemaOrType)
+  trackToon('dense', raw, result)
+  return result
+}
+
+toon.api = function(items: Record<string, unknown>[], schemaOrType: ToonSchema | string): string {
+  const raw = JSON.stringify(items)
+  const result = _api.call(this, items, schemaOrType)
+  trackToon('api', raw, result)
+  return result
+}
+
+toon.js = function(items: Record<string, unknown>[], schemaOrType: ToonSchema | string): string {
+  const raw = JSON.stringify(items)
+  const result = _js.call(this, items, schemaOrType)
+  trackToon('js', raw, result)
+  return result
+}

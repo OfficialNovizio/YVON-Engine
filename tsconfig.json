@@ -17,5 +17,5 @@
     "moduleResolution": "node"
   },
   "include": ["src/**/*.ts"],
-  "exclude": ["node_modules", "dist", "cli"]
+  "exclude": ["node_modules", "dist", "cli", "src/dashboard/ui"]
 }

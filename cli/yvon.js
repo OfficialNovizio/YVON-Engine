@@ -227,6 +227,9 @@ YVON Engine CLI v1.3.0
   yvon graph         Rebuild knowledge graphs
   yvon agents        List all 13 agents
   yvon dashboard     Open live dashboard (port 4200)
+  yvon dashboard --hide     Hide dashboard from settings
+  yvon dashboard --show     Show dashboard in settings
+  yvon dashboard --status   Show current config
   yvon version       Show version
 `)
 }
@@ -462,15 +465,21 @@ function integrate() {
     process.exit(1)
   }
   
-  // ── Step 1: Check if @yvon/engine is installed ──────────────────────────
-  const enginePath = path.join(cwd, 'node_modules', '@yvon', 'engine')
-  const engineInstalled = fs.existsSync(enginePath)
+  // ── Step 1: Check if yvon-engine is installed ────────────────────────────
+  const enginePath = path.join(cwd, 'node_modules', 'yvon-engine')
+  let engineInstalled = fs.existsSync(enginePath)
   
   if (!engineInstalled) {
-    console.log('  📦 @yvon/engine not installed. Installing...')
+    // also check old @yvon/engine path
+    const oldPath = path.join(cwd, 'node_modules', '@yvon', 'engine')
+    if (fs.existsSync(oldPath)) engineInstalled = true
+  }
+  
+  if (!engineInstalled) {
+    console.log('  📦 yvon-engine not installed. Installing...')
     const { execSync } = require('child_process')
     try {
-      execSync('npm install github:OfficialNovizio/YVON-Engine', { cwd, stdio: 'inherit' })
+      execSync('npm install yvon-engine', { cwd, stdio: 'inherit' })
       console.log('  ✅ Installed\n')
     } catch (e) {
       console.log('  ❌ Install failed:', e.message)
@@ -480,9 +489,12 @@ function integrate() {
   
   // ── Step 2: Map of local → engine imports ───────────────────────────────
   const replacements = {
-    '@/lib/cie': '@yvon/engine/cie',
-    '@/lib/toon': '@yvon/engine/toon',
-    '@/lib/algorithms': '@yvon/engine/algorithms',
+    '@/lib/cie': 'yvon-engine/cie',
+    '@/lib/toon': 'yvon-engine/toon',
+    '@/lib/algorithms': 'yvon-engine/algorithms',
+    '@yvon/engine/cie': 'yvon-engine/cie',
+    '@yvon/engine/toon': 'yvon-engine/toon',
+    '@yvon/engine/algorithms': 'yvon-engine/algorithms',
   }
   
   const stats = { scanned: 0, patched: 0, already: 0, errors: 0 }
@@ -539,12 +551,12 @@ function integrate() {
   
   if (routePath) {
     let routeContent = fs.readFileSync(routePath, 'utf-8')
-    const hasCie = routeContent.includes('buildCieContext') || routeContent.includes('@yvon/engine/cie')
+    const hasCie = routeContent.includes('buildCieContext') || routeContent.includes('yvon-engine/cie')
     
     if (!hasCie) {
       // Insert import after the last @anthropic-ai or @/lib import
       const importInsertRe = /(import\s+.+from\s+['"]@(anthropic|supabase|\/).+['"]\s*\n)(?!\s*import)/g
-      const importInsert = `import { buildCieContext } from '@yvon/engine/cie'\n`
+      const importInsert = `import { buildCieContext } from 'yvon-engine/cie'\\n`
       
       let injected = false
       routeContent = routeContent.replace(importInsertRe, (match) => {
@@ -603,6 +615,24 @@ function integrate() {
     }
   }
   
+  // ── Step 3.6: Inject dashboard into project settings ─────────────────────
+  const { injectDashboard } = require('../dist/dashboard/inject')
+  const result = injectDashboard(cwd)
+  for (const f of result.created) {
+    console.log(`  ✅ ${f} — Dashboard page created`)
+  }
+  for (const f of result.skipped) {
+    console.log(`  ⏭️  ${f}`)
+  }
+  for (const e of result.errors) {
+    console.log(`  ⚠️  ${e}`)
+  }
+  
+  if (result.created.length > 0) {
+    console.log('\n  📱 Dashboard embedded at /settings/dashboard')
+    console.log('  Toggle visibility in Settings → Dashboard')
+  }
+  
   // ── Step 4: Summary ──────────────────────────────────────────────────────
   console.log(`\n  📊 ${stats.scanned} files scanned`)
   if (stats.patched > 0) {
@@ -630,6 +660,35 @@ const cmds = { init, doctor, graph, agents, dashboard, integrate, version }
 ;(cmds[command] || help)()
 
 function dashboard() {
+  const flag = process.argv[3]
+  
+  // ── Config toggles ────────────────────────────────────────────────────────
+  if (flag === '--hide' || flag === '--show') {
+    const configPath = path.join(process.cwd(), 'yvon.config.json')
+    let config = { dashboard: { showInSettings: true, autoStartOnDev: true, port: 4200, theme: 'dark' } }
+    if (fs.existsSync(configPath)) {
+      try { config = JSON.parse(fs.readFileSync(configPath, 'utf-8')) } catch {}
+    }
+    config.dashboard.showInSettings = flag === '--show'
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 2))
+    console.log(`\n  ${flag === '--show' ? '✅' : '🙈'} Dashboard ${flag === '--show' ? 'shown' : 'hidden'} in Settings`)
+    console.log(`  Access via: npx yvon dashboard\n`)
+    return
+  }
+  
+  if (flag === '--status') {
+    const configPath = path.join(process.cwd(), 'yvon.config.json')
+    if (fs.existsSync(configPath)) {
+      const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'))
+      console.log('\n  Dashboard config:')
+      console.log(`  Show in Settings: ${config.dashboard?.showInSettings !== false ? '✅ Yes' : '🙈 No'}`)
+      console.log(`  Auto-start: ${config.dashboard?.autoStartOnDev !== false ? '✅ Yes' : '❌ No'}`)
+      console.log(`  Port: ${config.dashboard?.port || 4200}\n`)
+    } else {
+      console.log('\n  No yvon.config.json — defaults active\n')
+    }
+    return
+  }
   console.log('\n  ⚡ Starting TOON Dashboard...\n')
   try {
     const { startDashboard } = require('../dist/dashboard/index.js')

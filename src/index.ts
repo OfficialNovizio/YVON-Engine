@@ -40,7 +40,14 @@ export type { MCPClient } from './adapters/mcp-client'
 
 // ─── Dashboard ─────────────────────────────────────────────────────────────────
 
-export { startDashboard } from './dashboard'
+export { startDashboard, stopDashboard } from './dashboard'
+export { injectDashboard } from './dashboard/inject'
+export type { InjectResult } from './dashboard/inject'
+
+// ─── Metrics ───────────────────────────────────────────────────────────────────
+
+export { metrics } from './metrics/collector'
+export { runHealthChecks } from './metrics/health-checks'
 
 // ─── Hermes ────────────────────────────────────────────────────────────────────
 

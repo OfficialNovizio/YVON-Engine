@@ -15,6 +15,7 @@ import { classifyTask } from './classifier'
 import { retrieveContext } from './retriever'
 import { rankContext, getSourcesUsed } from './ranker'
 import { buildInjection } from './builder'
+import { metrics } from '../metrics/collector'
 
 // ─── Public API ──────────────────────────────────────────────────────────────
 
@@ -68,6 +69,21 @@ export function buildCieContext(params: CieParams): CieContext {
   // Step 4: Build injection blocks
   const timeMs = Date.now() - t0
   const context = buildInjection(selected, filtered, timeMs)
+  
+  // ── Record CIE metrics (zero overhead when dashboard is off) ──────────────
+  if (metrics.isEnabled()) {
+    metrics.recordCieTick({
+      timestamp: Date.now(),
+      taskType: profile.type,
+      taskLength: taskLen,
+      classified: 0, // zero-token regex classification
+      retrieved: items.length,
+      injected: selected.length,
+      filtered: filtered.length,
+      latencyMs: timeMs,
+      skipped: taskLen < 500, // short tasks skip full CIE
+    })
+  }
   
   return context
 }
