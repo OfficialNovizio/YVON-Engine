@@ -1,17 +1,19 @@
 // YVON Engine — AI Agent OS Kernel
 // 
-// One npm install. Full agent team.
+// One npm install. Full agent team. Automatic TOON-ification.
 // 
-// @yvon/engine provides:
+// yvon-engine provides:
+//   - TOON Auto-Conversion: Scans project, auto-wires TOON everywhere (prompts, docs, memory, API)
 //   - CIE: Context Intelligence Engine (classify → retrieve → rank → inject)
 //   - TOON: Token-Optimized Object Notation (84.5% token savings)
 //   - Agents: 13 AI agent personalities
 //   - Algorithms: Bloom, MinHash, TF-IDF, BFS, PriorityQueue
 //   - Adapters: Config resolver, provider interface, DB interface
+//   - Hermes Bridge: TOON-compress Hermes memory, sessions, skills
 //
 // Usage:
-//   import { createEngine, buildCieContext } from '@yvon/engine'
-//   const cie = buildCieContext({ agentId: 'dev-lead', task: 'fix build error', venture: 'myproject' })
+//   import { toonifyAll } from 'yvon-engine/toon/auto'
+//   const result = toonifyAll('/path/to/project')
 
 // ─── Main engine ──────────────────────────────────────────────────────────────
 
@@ -48,6 +50,16 @@ export type { InjectResult } from './dashboard/inject'
 
 export { metrics } from './metrics/collector'
 export { runHealthChecks } from './metrics/health-checks'
+
+// ─── TOON Auto-Conversion ──────────────────────────────────────────────────────
+// One call: toonifyAll(projectRoot) — scans, injects, compresses everything.
+
+export { scanProject, injectToon, toonifyAll } from './toon/auto'
+export { autoToonMiddleware } from './toon/auto/middleware'
+export { compressHermesMemory, computeHermesSessionDelta, compressHermesSkill, toonifyHermes } from './toon/auto/hermes-bridge'
+export type { ToonContext, ToonMiddlewareOptions } from './toon/auto/middleware'
+export type { ProjectScan, InjectionPoint } from './toon/auto/scanner'
+export type { InjectionResult } from './toon/auto/injector'
 
 // ─── Hermes ────────────────────────────────────────────────────────────────────
 

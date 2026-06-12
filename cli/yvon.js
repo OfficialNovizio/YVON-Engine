@@ -633,6 +633,22 @@ function integrate() {
     console.log('  Toggle visibility in Settings → Dashboard')
   }
   
+  // ── Step 3.7: TOON-ify the entire project ────────────────────────────────
+  console.log('\n  🎯 Auto-TOON-ifying project...\n')
+  try {
+    const { toonifyAll } = require('../dist/toon/auto/index')
+    const toonResult = toonifyAll(cwd)
+    stats.patched += toonResult.injection.injected.length
+    console.log(`  ✅ ${toonResult.injection.summary.documentsTooned} docs compressed`)
+    console.log(`  ✅ ${toonResult.injection.summary.memoriesTooned} agent memories compressed`)
+    if (toonResult.hermes) {
+      console.log(`  ✅ Hermes: ${toonResult.hermes.memoriesCompressed} memories, ${toonResult.hermes.skillsCompressed} skills`)
+    }
+    console.log(`  💰 ~${toonResult.scan.estimatedTokenSavings}% token savings on every LLM call\n`)
+  } catch (e) {
+    console.log(`  ⚠️  TOON auto-injection skipped: ${e.message}`)
+  }
+  
   // ── Step 4: Summary ──────────────────────────────────────────────────────
   console.log(`\n  📊 ${stats.scanned} files scanned`)
   if (stats.patched > 0) {
