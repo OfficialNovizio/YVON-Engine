@@ -141,11 +141,11 @@ export function compile(options: CompileOptions): CompileResult {
 
   for (const chunk of allChunks) {
     for (const kw of chunk.keywords) {
-      if (!invertedIndex[kw]) invertedIndex[kw] = []
+      if (!Array.isArray(invertedIndex[kw])) invertedIndex[kw] = []
       invertedIndex[kw].push(chunk.id)
     }
     for (const bg of chunk.bigrams) {
-      if (!bigramIndex[bg]) bigramIndex[bg] = []
+      if (!Array.isArray(bigramIndex[bg])) bigramIndex[bg] = []
       bigramIndex[bg].push(chunk.id)
     }
   }

@@ -118,12 +118,12 @@ function compile(options) {
     const bigramIndex = {};
     for (const chunk of allChunks) {
         for (const kw of chunk.keywords) {
-            if (!invertedIndex[kw])
+            if (!Array.isArray(invertedIndex[kw]))
                 invertedIndex[kw] = [];
             invertedIndex[kw].push(chunk.id);
         }
         for (const bg of chunk.bigrams) {
-            if (!bigramIndex[bg])
+            if (!Array.isArray(bigramIndex[bg]))
                 bigramIndex[bg] = [];
             bigramIndex[bg].push(chunk.id);
         }
