@@ -38,6 +38,14 @@ export type { EngineConfig } from './adapters/config'
 export { createMCPClient } from './adapters/mcp-client'
 export type { MCPClient } from './adapters/mcp-client'
 
+// ─── Dashboard ─────────────────────────────────────────────────────────────────
+
+export { startDashboard } from './dashboard'
+
+// ─── Hermes ────────────────────────────────────────────────────────────────────
+
+export { syncWithHermes, pushToHermes } from './adapters/hermes-sync'
+
 // ─── Engine creator ───────────────────────────────────────────────────────────
 
 export interface EngineOptions {
