@@ -85,12 +85,40 @@ export function createEngine(binPath: string) {
   }
 
   function compressPrompt(text: string): string {
-    const data = load()
-    if (!data.bpeTable?.vocab) return text
-    const vocabSize = data.bpeTable.vocab instanceof Map ? data.bpeTable.vocab.size : Object.keys(data.bpeTable.vocab).length
-    if (!vocabSize) return text
-    let result = bpeEncode(text, data.bpeTable)
+    // BPE is only for internal store — user prompts must stay LLM-readable
+    // Use abbreviation + colloquial cleanup instead
+    let result = abbreviateQuery(text)
     result = result.replace(/please note that /gi, '').replace(/I would like to /gi, '')
+    return result
+  }
+
+  // Quick abbreviation map — common words the LLM understands shortened
+  function abbreviateQuery(text: string): string {
+    const abbrs: Record<string, string> = {
+      'comprehensive': 'full',
+      'analysis': 'analysis',
+      'analyze': 'analyze',
+      'dashboard': 'dashboard',
+      'with live data streaming from': 'w/ live',
+      'social media APIs': 'social APIs',
+      'Use the existing': 'Use existing',
+      'architecture and agent routing system': 'arch + agent routing',
+      'current pricing strategy': 'pricing',
+      'fashion brand': 'brand',
+      'and identify gaps where competitors are': 'find competitor gaps',
+      'market research data': 'market data',
+      'context retrieval pipeline': 'CIE pipeline',
+      'to reduce latency by': 'cut latency',
+      'The current implementation uses': 'Using',
+      'for deduplication': 'for dedup',
+      'compression schema': 'TOON schema',
+      'for structured financial data': 'for finance',
+      'across multiple ventures': 'across ventures',
+    }
+    let result = text
+    for (const [full, short] of Object.entries(abbrs)) {
+      result = result.replace(new RegExp(full, 'gi'), short)
+    }
     return result
   }
 

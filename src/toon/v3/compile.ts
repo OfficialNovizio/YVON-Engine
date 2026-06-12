@@ -33,7 +33,10 @@ export function compile(options: CompileOptions): CompileResult {
 
   // 1. Collect all documents and memories
   const docs = collectFiles(join(root, 'docs'), '.md')
-  const mems = collectFiles(join(root, 'agent-department'), '.md').filter(f => f.includes('MEMORY') || f.includes('AGENT'))
+  const mems = [
+    ...collectFiles(join(root, 'agent-department'), '.md').filter(f => f.includes('MEMORY') || f.includes('AGENT')),
+    ...collectFiles(join(root, 'agent-memory'), '.md').filter(f => f.includes('MEMORY') || f.includes('AGENT')),
+  ]
 
   // 2. Strip + chunk all files
   const allChunks: Chunk[] = []
