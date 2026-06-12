@@ -106,6 +106,9 @@ function init() {
   const templateDir = path.join(__dirname, '..', 'templates', 'agents')
   const agentMemoryDir = path.join(cwd, 'agent-memory')
   
+  let agentsCreated = 0
+  let agentsUpdated = 0
+  
   if (fs.existsSync(templateDir)) {
     const agents = fs.readdirSync(templateDir).filter(d => 
       fs.statSync(path.join(templateDir, d)).isDirectory() && d !== 'skills' && d !== 'brands'
