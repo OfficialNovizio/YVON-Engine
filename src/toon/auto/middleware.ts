@@ -60,6 +60,12 @@ let _v3EngineLoaded = false
 export function autoToonMiddleware(options: ToonMiddlewareOptions): ToonContext {
   const root = options.projectRoot || process.cwd()
   
+  // ─── Set env vars for metrics tracking (ALWAYS ON v2.0) ─────────────────
+  if (options.agentId) process.env.YVON_AGENT_ID = options.agentId
+  if (options.ventureId) process.env.YVON_VENTURE_ID = options.ventureId
+  process.env.YVON_PROVIDER = process.env.YVON_PROVIDER || 'deepseek'
+  process.env.YVON_MODEL = process.env.YVON_MODEL || process.env.ANTHROPIC_MODEL || 'claude-sonnet'
+  
   // ─── V3 Engine (query-aware progressive loading) ──────────────────────────
   if (!_v3EngineLoaded) {
     const v3Path = join(root, '.toon', 'v3', 'engine.bin')

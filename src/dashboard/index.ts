@@ -10,7 +10,7 @@ import { existsSync } from 'fs'
 import { metrics } from '../metrics/collector'
 import { runHealthChecks } from '../metrics/health-checks'
 import { initAgentActivities } from '../metrics/agent-tracker'
-import apiRoutes from './api'
+import apiRoutes, { providerSimulatorRoutes } from './api'
 import { attachWebSocket, stopWebSocket } from './ws'
 
 const DEFAULT_PORT = 4200
@@ -26,6 +26,7 @@ export function startDashboard(port: number = DEFAULT_PORT): void {
 
   // API routes
   app.use('/api', apiRoutes)
+  app.use('/api/simulator', providerSimulatorRoutes())
 
   // Serve React SPA if built, otherwise fallback to basic HTML
   const uiDist = join(__dirname, 'ui', 'dist')

@@ -16,12 +16,12 @@
 
 import { metrics } from '../metrics/collector'
 
-// ─── Metrics tracking helper ─────────────────────────────────────────────────
-function trackToon(format: string, input: string, output: string, model?: string): void {
-  if (!metrics.isEnabled()) return
+// ─── Metrics tracking helper (ALWAYS ON v2.0) ────────────────────────────────
+function trackToon(format: string, input: string, output: string, model?: string, agentId?: string, provider?: string): void {
   const savings = Math.max(0, input.length - output.length)
   metrics.recordToonCall({
     timestamp: Date.now(),
+    provider: provider || process.env.YVON_PROVIDER || 'deepseek',
     model: model || 'default',
     format: format as any,
     inputTokens: Math.ceil(input.length / 4),
@@ -29,6 +29,8 @@ function trackToon(format: string, input: string, output: string, model?: string
     bytesBefore: input.length,
     bytesAfter: output.length,
     costSaved: savings * 0.00000015, // ~$0.15 per MB of savings
+    agentId: agentId || process.env.YVON_AGENT_ID,
+    ventureId: process.env.YVON_VENTURE_ID,
   })
 }
 
@@ -309,39 +311,49 @@ export const toon = {
 
 export default toon
 
-// ─── Metrics-wrapped exports ──────────────────────────────────────────────────
-// Each compression method records a ToonCall when metrics are enabled.
-// Zero overhead when dashboard is off (one boolean check per call).
+// ─── Metrics-wrapped exports (ALWAYS ON v2.0) ────────────────────────────────
+// Every compression call is tracked and persisted to SQLite.
+// Provider/model/agent are read from env vars set by the middleware.
 
 const _claude = toon.claude
 const _dense = toon.dense
 const _api = toon.api
 const _js = toon.js
 
+function _getModel(): string {
+  return process.env.YVON_MODEL || process.env.ANTHROPIC_MODEL || 'default'
+}
+function _getProvider(): string {
+  return process.env.YVON_PROVIDER || 'deepseek'
+}
+function _getAgentId(): string | undefined {
+  return process.env.YVON_AGENT_ID
+}
+
 toon.claude = function(items: Record<string, unknown>[], schemaOrType: ToonSchema | string): string {
   const raw = JSON.stringify(items)
   const result = _claude.call(this, items, schemaOrType)
-  trackToon('claude', raw, result)
+  trackToon('claude', raw, result, _getModel(), _getAgentId(), _getProvider())
   return result
 }
 
 toon.dense = function(items: Record<string, unknown>[], schemaOrType: ToonSchema | string): string {
   const raw = JSON.stringify(items)
   const result = _dense.call(this, items, schemaOrType)
-  trackToon('dense', raw, result)
+  trackToon('dense', raw, result, _getModel(), _getAgentId(), _getProvider())
   return result
 }
 
 toon.api = function(items: Record<string, unknown>[], schemaOrType: ToonSchema | string): string {
   const raw = JSON.stringify(items)
   const result = _api.call(this, items, schemaOrType)
-  trackToon('api', raw, result)
+  trackToon('api', raw, result, _getModel(), _getAgentId(), _getProvider())
   return result
 }
 
 toon.js = function(items: Record<string, unknown>[], schemaOrType: ToonSchema | string): string {
   const raw = JSON.stringify(items)
   const result = _js.call(this, items, schemaOrType)
-  trackToon('js', raw, result)
+  trackToon('js', raw, result, _getModel(), _getAgentId(), _getProvider())
   return result
 }

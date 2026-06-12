@@ -30,9 +30,9 @@ function sendStats(ws: WebSocket): void {
   const payload = JSON.stringify({
     type: 'stats',
     timestamp: Date.now(),
-    toon: metrics.getToonStats(),
-    cie: metrics.getCieStats(),
-    cost: metrics.getCostSummary(),
+    toon: metrics.getLiveToonStats(),
+    cie: metrics.getLiveCieStats(),
+    cost: metrics.getLiveCostSummary(),
     modules: metrics.getModuleStatuses(),
     agents: metrics.getAllAgentActivities(),
   })

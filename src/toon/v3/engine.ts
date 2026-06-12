@@ -13,6 +13,7 @@ import { encode as bpeEncode, decode as bpeDecode, BPETable } from './bpe'
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs'
 import { join } from 'path'
 import { createHash } from 'crypto'
+import { metrics } from '../../metrics/collector'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -319,6 +320,30 @@ export function createEngine(binPath: string) {
       saveDelta(options.sessionId, matches, options.userMessage)
     }
 
+    // 6. Record metrics (ALWAYS ON v2.0)
+    const savingsPercent = options.userMessage.length > 0
+      ? Math.round(((options.userMessage.length - compressed.length) / options.userMessage.length) * 1000) / 10
+      : 0
+    const env: any = typeof globalThis !== 'undefined' ? (globalThis as any).process?.env : {}
+    metrics.recordEngineQuery({
+      timestamp: Date.now(),
+      provider: env.YVON_PROVIDER || 'deepseek',
+      model: env.YVON_MODEL || env.ANTHROPIC_MODEL || 'default',
+      agentId: options.agentId || env.YVON_AGENT_ID,
+      ventureId: options.ventureId || env.YVON_VENTURE_ID,
+      taskType: classifyTask(options.userMessage),
+      queryHash: createHash('sha256').update(options.userMessage).digest('hex').slice(0, 8),
+      originalChars: options.userMessage.length,
+      injectedChars: matches.reduce((s, m) => s + m.text.length, 0),
+      savingsPercent,
+      chunksMatched: matches.length,
+      chunksInjected: matches.filter(m => m.level !== 'REF').length,
+      injectionLevel: matches.length > 0 ? matches[0].level : 'L2',
+      latencyMs: 0, // filled by middleware wrapper
+      docCount: matches.filter(m => m.chunk.docId !== 'delta' && m.chunk.docId !== 'SAME').length,
+      memoryCount: 0,
+    })
+
     return {
       compressedUserMessage: compressed,
       docContext: matches.map(m => m.text).join('\n'),
@@ -364,3 +389,24 @@ export function createEngine(binPath: string) {
 }
 
 export type V3Engine = ReturnType<typeof createEngine>
+
+// ─── Task Classifier ──────────────────────────────────────────────────────────
+// Lightweight keyword-based classification — no LLM call needed.
+
+function classifyTask(text: string): string {
+  const lower = text.toLowerCase()
+  if (/bug|error|fix|crash|broken|failing|test fail|debug/i.test(lower)) return 'debugging'
+  if (/code review|pull request|pr review|review this code|check this pr/i.test(lower)) return 'code-review'
+  if (/build|deploy|ship|release|publish|npm publish|vercel/i.test(lower)) return 'deployment'
+  if (/strategy|roadmap|plan|okr|direction|vision|quarterly|annual/i.test(lower)) return 'strategy'
+  if (/competitor|market|competition|rival|industry/i.test(lower)) return 'competitor'
+  if (/analytics|metrics|kpi|data|stats|dashboard|report|chart/i.test(lower)) return 'analytics'
+  if (/content|post|caption|copy|write|blog|social media|tweet|instagram/i.test(lower)) return 'content'
+  if (/finance|cost|revenue|budget|pricing|roi|profit|loss/i.test(lower)) return 'finance'
+  if (/design|ui|ux|layout|style|css|component|visual/i.test(lower)) return 'design'
+  if (/api|endpoint|route|backend|database|schema|query|supabase/i.test(lower)) return 'backend'
+  if (/frontend|react|next|component|page|client/i.test(lower)) return 'frontend'
+  if (/test|qa|verify|check|validate/i.test(lower)) return 'testing'
+  if (/plan|organize|schedule|task|todo|assign/i.test(lower)) return 'planning'
+  return 'general'
+}

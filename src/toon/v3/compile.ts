@@ -11,6 +11,7 @@ import { Chunk, EngineData } from './engine'
 import { createHash } from 'crypto'
 import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync } from 'fs'
 import { join, extname, relative } from 'path'
+import { metrics } from '../../metrics/collector'
 
 export interface CompileOptions {
   projectRoot: string
@@ -28,6 +29,7 @@ export interface CompileResult {
 }
 
 export function compile(options: CompileOptions): CompileResult {
+  const startTime = Date.now()
   const root = options.projectRoot
   const outPath = options.outPath || join(root, '.toon', 'v3', 'engine.bin')
 
@@ -132,6 +134,19 @@ export function compile(options: CompileOptions): CompileResult {
 
   mkdirSync(join(outPath, '..'), { recursive: true })
   writeFileSync(outPath, JSON.stringify(engineData))
+
+  // Record compile metrics (ALWAYS ON v2.0)
+  const durationMs = Date.now() - startTime
+  metrics.recordCompile({
+    timestamp: Date.now(),
+    durationMs,
+    filesScanned: allFiles.length,
+    chunksBuilt: allChunks.length,
+    termsIndexed: Object.keys(invertedIndex).length,
+    bpeTokens: Number((bpeTable.vocab as Map<string,string>).size) || 0,
+    corpusSizeBytes: corpus.length,
+    binSizeBytes: JSON.stringify(engineData).length,
+  })
 
   return {
     path: outPath,
