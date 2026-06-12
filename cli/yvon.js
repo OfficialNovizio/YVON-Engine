@@ -668,7 +668,7 @@ function integrate() {
   console.log('')
 }
 
-function version() { console.log('YVON Engine v1.3.0') }
+function version() { console.log('YVON Engine v1.5.0') }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
@@ -754,18 +754,42 @@ function stats() {
     console.log(`  Total docs:       ${s.totalDocs}`)
     console.log(`  Human-readable:   ${(s.totalHumanSize / 1024).toFixed(1)} KB`)
     console.log(`  LLM-optimized:    ${(s.totalToonSize / 1024).toFixed(1)} KB`)
-    console.log(`  Savings:          ${s.savingsPercent}%`)
+    console.log(`  File savings:     ${s.savingsPercent}% (per-file compression)`)
     console.log('')
     console.log('  Breakdown:')
     console.log(`    Agent memory:   ${s.breakdown.agentMemory.count} docs, ${(s.breakdown.agentMemory.humanSize/1024).toFixed(1)}KB → ${(s.breakdown.agentMemory.toonSize/1024).toFixed(1)}KB`)
     console.log(`    Docs:           ${s.breakdown.docs.count} docs, ${(s.breakdown.docs.humanSize/1024).toFixed(1)}KB → ${(s.breakdown.docs.toonSize/1024).toFixed(1)}KB`)
     console.log(`    Graphs:         ${s.breakdown.graphs.count} docs, ${(s.breakdown.graphs.humanSize/1024).toFixed(1)}KB → ${(s.breakdown.graphs.toonSize/1024).toFixed(1)}KB`)
     console.log(`    Project:        ${s.breakdown.project.count} docs, ${(s.breakdown.project.humanSize/1024).toFixed(1)}KB → ${(s.breakdown.project.toonSize/1024).toFixed(1)}KB`)
-    console.log('')
   } catch (e) {
-    console.log(`  ⚠️  Stats unavailable: ${e.message}`)
-    console.log('  Run: npm install yvon-engine@latest\n')
+    console.log(`  ⚠️  File stats unavailable: ${e.message}`)
   }
+  
+  // Runtime savings (v3 engine progressive loading)
+  console.log('')
+  try {
+    const engineBin = path.join(process.cwd(), '.toon', 'v3', 'engine.bin')
+    if (fs.existsSync(engineBin)) {
+      const { createEngine } = require('../dist/toon/v3/engine')
+      const engine = createEngine(engineBin)
+      const data = engine.load()
+      const corpusKB = (data.corpusSize / 1024).toFixed(1)
+      const sampleCtx = engine.process({
+        systemPrompt: 'test',
+        userMessage: 'analyze performance metrics',
+        agentId: 'kai-analyst'
+      })
+      const runtimeSavings = Math.round((1 - sampleCtx.stats.totalContextLen / Math.max(1, data.corpusSize / 3)) * 100)
+      console.log(`  🔥 RUNTIME (v3 progressive loading):`)
+      console.log(`    Corpus:          ${corpusKB} KB`)
+      console.log(`    Injected/query:  ${(sampleCtx.stats.totalContextLen/1024).toFixed(1)} KB`)
+      console.log(`    Runtime savings: ${runtimeSavings}% (vs loading full corpus)`)
+      console.log(`    ${runtimeSavings >= 94 ? '✅' : '⚠️'} 94% hard boundary: ${runtimeSavings >= 94 ? 'MET' : 'BELOW — needs investigation'}`)
+    }
+  } catch (e) {
+    console.log(`  ⚠️  Runtime stats unavailable: ${e.message}`)
+  }
+  console.log('')
 }
 
 function dashboard() {
