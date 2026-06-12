@@ -82,8 +82,8 @@ function compile(options) {
                 docId,
                 level: 1,
                 heading,
-                body: stripped.output.trim().substring(0, 2000), // cap at 2000 chars
-                keywords: [],
+                body: stripped.output.trim().substring(0, 2000),
+                keywords: extractKeywords(stripped.output.trim().substring(0, 2000), 50), // more keywords for non-markdown
                 bigrams: [],
                 hash: '',
             });
@@ -211,14 +211,14 @@ function chunkDocument(text, docId, startId) {
         chunks.push(current);
     return chunks;
 }
-function extractKeywords(text) {
+function extractKeywords(text, limit = 15) {
     const words = text.toLowerCase()
         .replace(/[^a-z0-9\s]/g, ' ')
         .split(/\s+/)
         .filter(w => w.length > 2)
         .filter(w => !/^(the|and|for|with|that|this|from|have|been|were|they|them|their|about|which|when|would|could|should|what|are|not|but|its|all|can|has|had|was|you|your|our|its|his|her|who|how|did|does|will|may|get|got|put|set|let|see|use|make|made|just|also|into|over|than|then|only|other|some|such|each|more|very|much|many|well|back|down|even|most|new|now|one|two|out|way|say|like|know|take|come|think|look|want|give|find|tell|ask|try|leave|keep|let|seem|feel|need|mean|become|show|call|work|still|last|between|same|part|place|year|thing|name|type|form|case|point|group|number|world|hand|side|kind|home|line|word|end|life|day|man|men|woman|women|child|people|person|state|country|school|house|family|problem|fact|idea|question|story|night|lot|right|left|top|bottom|front|back|high|low|small|large|long|short|little|big|early|late|young|old|good|bad|great|different|important|public|private|whole|certain|possible|hard|easy|able|open|close|full|free|real|true|false|ready|sure|clear|common|special|strong|simple|human|local|social|national|political|economic|military|cultural|religious|natural)$/.test(w))
         .map(stemmer_1.stem);
-    return [...new Set(words)].slice(0, 15);
+    return [...new Set(words)].slice(0, limit);
 }
 function extractBigrams(keywords) {
     const bigrams = [];
