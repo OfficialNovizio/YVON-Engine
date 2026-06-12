@@ -83,23 +83,7 @@ export function getHermesMemoryContext(keywords: string[]): string {
 }
 
 export function getHermesStandards(): string[] {
-  // Pull standards from engine.bin if available
-  const engine = loadEngineData()
-  if (engine?.chunks) {
-    const standardsChunks = engine.chunks.filter((c: any) => 
-      c.docId.startsWith('hermes/') && c.body.includes('AUDIT GATE')
-    )
-    if (standardsChunks.length > 0) {
-      // Extract bullet points from the first matching chunk
-      const lines = standardsChunks[0].body.split('\n').filter((l: string) => 
-        l.trim().startsWith('-') || l.trim().startsWith('AUDIT') || l.trim().startsWith('NO ') || 
-        l.trim().startsWith('TOON') || l.trim().startsWith('PLAN') || l.trim().startsWith('ADDITIVE')
-      )
-      if (lines.length > 0) return lines.map((l: string) => l.replace(/^-\s*/, '').trim())
-    }
-  }
-  
-  // Hardcoded fallback (survives any deployment)
+  // Hardcoded standards — always current, survives any deployment
   return [
     'AUDIT GATE — run tsc+build+lint before every push',
     'NO FAKE DATA — real Supabase data or honest empty states only',
