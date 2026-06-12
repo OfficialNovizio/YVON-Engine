@@ -170,7 +170,11 @@ export function createEngine(binPath: string) {
 
         const positionBonus = idx < 3 ? 1.5 : chunk.level === 1 ? 2.0 : chunk.level === 2 ? 1.5 : 1.0
         const agentBonus = agentId && chunk.keywords.some(k => k.includes(agentId.toLowerCase())) ? 2.0 : 1.0
-        const score = tfidfScore * positionBonus * agentBonus
+        // Hermes Agent data gets priority — always include the persistent brain
+        const hermesBonus = chunk.docId.startsWith('hermes/') ? 5.0 : 1.0
+        // USER.md preferences are always relevant
+        const userBonus = chunk.docId.includes('USER') ? 3.0 : 1.0
+        const score = tfidfScore * positionBonus * agentBonus * hermesBonus * userBonus
 
         if (score > 0) scored.push({ chunk, score })
       }
@@ -211,6 +215,18 @@ export function createEngine(binPath: string) {
 
   function buildSystemPrompt(basePrompt: string, docMatches: MatchResult[], agentId?: string | null): string {
     const parts: string[] = []
+
+    // Hermes USER preferences — ALWAYS injected (the persistent brain)
+    const hermesUser = docMatches.filter(m => m.chunk.docId.includes('hermes/memories/USER'))
+    if (hermesUser.length > 0) {
+      parts.push('[HERMES AGENT — PERSISTENT PREFERENCES]\n' + hermesUser.map(m => m.text).join('\n'))
+    }
+
+    // Hermes MEMORY — always injected if matched
+    const hermesMemory = docMatches.filter(m => m.chunk.docId.includes('hermes/memories/MEMORY'))
+    if (hermesMemory.length > 0) {
+      parts.push('[HERMES AGENT — PERSISTENT MEMORY]\n' + hermesMemory.map(m => m.text).join('\n'))
+    }
 
     // Dictionary
     parts.push('[TOON DICTIONARY — use abbreviations: ...]')

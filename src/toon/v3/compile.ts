@@ -1,8 +1,9 @@
 // src/toon/v3/compile.ts — Build engine.bin on yvon integrate
 //
-// Scans project docs + memories, strips, chunks, indexes, trains BPE,
-// and compiles everything into a single JSON blob at .toon/v3/engine.bin.
-// Loaded once at first Claude call, cached in memory forever.
+// Scans project docs + memories + Hermes Agent data, strips, chunks, indexes,
+// trains BPE, and compiles everything into engine.bin.
+// Hermes Agent (~/.hermes/) is the persistent brain — indexed with priority.
+// Loaded once at first agent call, cached in memory forever.
 
 import { strip } from '../v2/stripper'
 import { stem } from './stemmer'
@@ -10,7 +11,8 @@ import { trainBPE, BPETable } from './bpe'
 import { Chunk, EngineData } from './engine'
 import { createHash } from 'crypto'
 import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync } from 'fs'
-import { join, extname, relative } from 'path'
+import { join, extname, relative, resolve } from 'path'
+import { homedir } from 'os'
 import { metrics } from '../../metrics/collector'
 
 export interface CompileOptions {
@@ -33,7 +35,7 @@ export function compile(options: CompileOptions): CompileResult {
   const root = options.projectRoot
   const outPath = options.outPath || join(root, '.toon', 'v3', 'engine.bin')
 
-  // 1. Collect all documents, memories, graphs, project configs
+  // 1. Collect all documents, memories, graphs, project configs + Hermes Agent data
   const docs = collectFiles(join(root, 'docs'), '.md')
   const mems = [
     ...collectFiles(join(root, 'agent-department'), '.md').filter(f => f.includes('MEMORY') || f.includes('AGENT')),
@@ -46,6 +48,18 @@ export function compile(options: CompileOptions): CompileResult {
   const scriptsDir = collectFiles(join(root, 'scripts'), '.mjs')
   const envTemplate = existsSync(join(root, '.env.example')) ? [join(root, '.env.example')] : []
   
+  // ─── Hermes Agent — the persistent brain (VPS) ───────────────────────────
+  const hermesHome = join(homedir(), '.hermes')
+  const hermesMemories = existsSync(join(hermesHome, 'memories'))
+    ? collectFiles(join(hermesHome, 'memories'), '.md')
+    : []
+  const hermesSkills = existsSync(join(hermesHome, 'skills'))
+    ? collectFiles(join(hermesHome, 'skills'), 'SKILL.md')
+    : []
+  const hermesSessions = existsSync(join(hermesHome, 'sessions'))
+    ? collectFiles(join(hermesHome, 'sessions'), '.json')
+    : []
+  
   // Also scan .toon/ directories if originals absorbed
   const toonDocs = collectFiles(join(root, '.toon', 'docs'), '.toon')
   const toonMemory = collectFiles(join(root, '.toon', 'memory'), '.toon')
@@ -56,6 +70,7 @@ export function compile(options: CompileOptions): CompileResult {
     ...docs, ...mems, ...graphs, ...graphJson, ...claudeMd,
     ...supabaseMigrations, ...scriptsDir, ...envTemplate,
     ...toonDocs, ...toonMemory, ...toonGraphs, ...toonProject,
+    ...hermesMemories, ...hermesSkills, ...hermesSessions,
   ]
 
   // 2. Strip + chunk all files
@@ -68,7 +83,13 @@ export function compile(options: CompileOptions): CompileResult {
     if (!existsSync(file)) continue
     const content = readFileSync(file, 'utf-8')
     const stripped = strip(content)
-    const docId = relative(root, file).replace(/\.[^.]+$/, '')
+    // Tag Hermes Agent data with 'hermes/' prefix for priority matching
+    const resolvedFile = resolve(file)
+    const resolvedHermesHome = resolve(hermesHome)
+    let docId = relative(root, file).replace(/\.[^.]+$/, '')
+    if (resolvedFile.startsWith(resolvedHermesHome)) {
+      docId = 'hermes/' + relative(resolvedHermesHome, resolvedFile).replace(/\.[^.]+$/, '')
+    }
     allText.push(stripped.output)
 
     // Build doc tree (H1/H2 headings only)

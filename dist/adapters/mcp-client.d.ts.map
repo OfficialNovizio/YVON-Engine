@@ -1,0 +1,1 @@
+{"version":3,"file":"mcp-client.d.ts","sourceRoot":"","sources":["../../src/adapters/mcp-client.ts"],"names":[],"mappings":"AAgBA,MAAM,WAAW,SAAS;IACxB,oEAAoE;IACpE,SAAS,EAAE,OAAO,CAAA;IAClB,8DAA8D;IAC9D,KAAK,EAAE,CAAC,CAAC,EAAE,MAAM,KAAK,OAAO,CAAC,MAAM,CAAC,CAAA;IACrC,mCAAmC;IACnC,KAAK,EAAE,MAAM,IAAI,CAAA;CAClB;AA8BD,wBAAgB,eAAe,IAAI,SAAS,CA8K3C"}

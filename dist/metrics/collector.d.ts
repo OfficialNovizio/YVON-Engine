@@ -1,0 +1,42 @@
+import type { ToonCall, EngineQuery, CompileRecord, CiePipelineTick, ModuleStatus, AgentActivity, ToonStats, EngineStats, CieStats, CostSummary, AgentEfficiency, WeeklyEfficiency, ContentTypeEfficiency, HealthScore, ProviderCost } from './types';
+declare class MetricsCollector {
+    private enabled;
+    private toonCalls;
+    private engineQueries;
+    private cieTicks;
+    private compileRecords;
+    private moduleStatuses;
+    private agentActivities;
+    enable(): void;
+    disable(): void;
+    isEnabled(): boolean;
+    recordToonCall(call: ToonCall): void;
+    recordEngineQuery(query: EngineQuery): void;
+    recordCompile(record: CompileRecord): void;
+    recordCieTick(tick: CiePipelineTick): void;
+    setModuleStatus(status: ModuleStatus): void;
+    setAgentActivity(activity: AgentActivity): void;
+    getModuleStatuses(): ModuleStatus[];
+    getAllAgentActivities(): AgentActivity[];
+    getToonCalls(limit?: number): ToonCall[];
+    getCieTicks(limit?: number): CiePipelineTick[];
+    getEngineQueries(limit?: number): EngineQuery[];
+    getLiveToonStats(): ToonStats;
+    getLiveCieStats(): CieStats;
+    getLiveCostSummary(): CostSummary;
+    getHistoricalToonStats(sinceHours?: number): ToonStats;
+    getHistoricalEngineStats(sinceHours?: number): EngineStats;
+    getHistoricalCostSummary(sinceHours?: number): CostSummary;
+    getAgentEfficiency(sinceHours?: number): AgentEfficiency[];
+    getWeeklyEfficiency(days?: number): WeeklyEfficiency[];
+    getContentTypeEfficiency(): ContentTypeEfficiency[];
+    getProviderCosts(sinceHours?: number): ProviderCost[];
+    getHealthScore(): HealthScore;
+    getRecentQueries(limit?: number): EngineQuery[];
+    getCompileHistory(limit?: number): CompileRecord[];
+    getAnomalies(sinceHours?: number): any[];
+    clear(): void;
+}
+export declare const metrics: MetricsCollector;
+export {};
+//# sourceMappingURL=collector.d.ts.map
