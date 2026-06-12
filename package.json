@@ -1,7 +1,7 @@
 {
-  "name": "@yvon/engine",
+  "name": "yvon-engine",
   "version": "1.3.0",
-  "description": "YVON Engine \u2014 AI Agent OS kernel. 13 agents, Context Intelligence Engine, TOON compression, knowledge graphs, Hermes sync. One npm install, full agent team.",
+  "description": "YVON Engine — AI Agent OS kernel. 13 agents, Context Intelligence Engine, TOON compression, knowledge graphs, Hermes sync. One npm install, full agent team.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
@@ -29,9 +29,9 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "prepare": "npm run build",
+    "test": "echo 'Tests pass — CI pending'",
     "prepublishOnly": "npm run build",
-    "test": "echo 'Tests pass \u2014 CI pending'"
+    "prepare": "npm run build"
   },
   "keywords": [
     "ai",
