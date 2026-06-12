@@ -142,8 +142,6 @@ function decodeMemoryRecord(parts: string[]): string {
 
 function unescape(s: string): string {
   return s
-    .replace(/\\\\n/g, '\n')
-    .replace(/\\\\\\|/g, '|')
     .replace(/\\n/g, '\n')
     .replace(/\\\|/g, '|')
 }

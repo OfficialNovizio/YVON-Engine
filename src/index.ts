@@ -65,6 +65,11 @@ export type { InjectionResult } from './toon/auto/injector'
 export type { ToonEncodeResult } from './toon/auto/encoder'
 export type { DecodedResult } from './toon/auto/decoder'
 
+// ─── TOON v2 — Structure Stripper ─────────────────────────────────────────────
+
+export { strip } from './toon/v2/stripper'
+export type { StripResult } from './toon/v2/stripper'
+
 // ─── Hermes ────────────────────────────────────────────────────────────────────
 
 export { syncWithHermes, pushToHermes } from './adapters/hermes-sync'

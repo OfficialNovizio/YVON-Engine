@@ -10,6 +10,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs'
 import { join, dirname, relative } from 'path'
 import type { ProjectScan, InjectionPoint, ProjectDictionary, DiscoveredSchema } from './scanner'
 import { encodeDocument, encodeMemory, generateDictionaryString, ABBREV_MAP } from './encoder'
+import { strip } from '../v2/stripper'
 
 export interface InjectionResult {
   injected: string[]     // Files modified
@@ -324,11 +325,17 @@ function compressDocuments(scan: ProjectScan, result: InjectionResult): void {
 }
 
 function compressDocumentToToon(content: string, path: string, _dict: ProjectDictionary): string {
-  const result = encodeDocument(content, path)
-  // Return TOON-encoded section records
+  // Strip markdown → semantic skeleton (30-60% savings)
+  // For documents, the stripped text IS the TOON format — LLM-readable, no syntax overhead
+  const stripped = strip(content)
+  // Encode only if further compression is beneficial
+  const result = encodeDocument(stripped.output, path)
+  // Use stripped output directly if TOON encoding adds overhead
+  const best = result.compressed.length < stripped.output.length ? result.compressed : stripped.output
+  const totalSavings = Math.round((1 - best.length / Math.max(1, content.length)) * 100)
   return [
-    `#DOC source=${path} savings=${result.savingsPercent}% compressed=${new Date().toISOString()}`,
-    ...result.records,
+    `#DOC source=${path} strip=${stripped.savingsPercent}% toon=${result.savingsPercent}% net=${totalSavings}%`,
+    best,
   ].join('\n')
 }
 

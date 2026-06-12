@@ -15,6 +15,7 @@
 import { existsSync, readFileSync, readdirSync } from 'fs'
 import { join } from 'path'
 import { encodePrompt, ABBREV_MAP, abbreviateText } from './encoder'
+import { toon } from '../toon'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -152,18 +153,37 @@ DICT x=approved:0|deferred:1|rejected:2|pending:3`
 // ─── Text Compressor ──────────────────────────────────────────────────────────
 
 function compressText(text: string, _termMap: Record<string, string>): string {
-  // Use the real encoder for structured prompt compression
-  const result = encodePrompt(text)
+  // Step 1: Detect and TOON-encode structured data blocks (JSON arrays, objects)
+  const structuredBlocks = extractStructuredBlocks(text)
+  if (structuredBlocks.length > 0) {
+    let result = text
+    for (const block of structuredBlocks) {
+      try {
+        const parsed = JSON.parse(block.text)
+        const arr = Array.isArray(parsed) ? parsed : [parsed]
+        const schemaType = block.hint || inferSchema(arr[0])
+        const encoded = toon.dense(arr, schemaType)
+        result = result.replace(block.text, `[TOON:${schemaType}]\n${encoded}\n[/TOON:${schemaType}]`)
+      } catch {
+        // Not valid JSON — fall through to abbreviation
+      }
+    }
+    // Abbreviate the remaining free text portions
+    return abbreviateText(result)
+      .replace(/\s+/g, ' ').trim()
+      .replace(/please note that /gi, '')
+      .replace(/I would like to /gi, '')
+  }
 
-  // If encoder found structure, return TOON records
+  // Step 2: Try structured prompt encoding (lists, key-value, tables)
+  const result = encodePrompt(text)
   if (result.records.length > 1) {
     return result.compressed
   }
 
-  // Fallback: comprehensive abbreviation substitution
+  // Step 3: Fallback — comprehensive abbreviation
   return abbreviateText(text)
     .replace(/\s+/g, ' ').trim()
-    // Remove filler phrases
     .replace(/please note that /gi, '')
     .replace(/I would like to /gi, '')
     .replace(/can you please /gi, '')
@@ -171,6 +191,54 @@ function compressText(text: string, _termMap: Record<string, string>): string {
     .replace(/I need you to /gi, '')
     .replace(/I want you to /gi, '')
     .replace(/would you be able to /gi, '')
+}
+
+// ─── Structured Block Detection ───────────────────────────────────────────────
+
+interface StructuredBlock {
+  text: string
+  hint?: string  // schema type hint from context
+}
+
+function extractStructuredBlocks(text: string): StructuredBlock[] {
+  const blocks: StructuredBlock[] = []
+
+  // Match JSON arrays: [...]
+  const arrayRe = /\[[\s\S]*?\{[\s\S]*?\}[\s\S]*?\]/g
+  let match
+  while ((match = arrayRe.exec(text)) !== null) {
+    blocks.push({ text: match[0] })
+  }
+
+  // Match JSON objects: {...} (with at least 3 keys to avoid false positives)
+  const objRe = /\{[\s\S]*?"[\s\S]*?":[\s\S]*?,[\s\S]*?"[\s\S]*?":[\s\S]*?,[\s\S]*?"[\s\S]*?":[\s\S]*?\}/g
+  while ((match = objRe.exec(text)) !== null) {
+    // Avoid duplicates with array matches
+    if (!blocks.some(b => b.text.includes(match![0]))) {
+      blocks.push({ text: match[0] })
+    }
+  }
+
+  // Detect schema hints in surrounding text
+  for (const block of blocks) {
+    const before = text.slice(Math.max(0, text.indexOf(block.text) - 50), text.indexOf(block.text))
+    const hintMatch = before.match(/(decisions?|tasks?|agents?|ventures?|competitors?|sessions?)/i)
+    if (hintMatch) {
+      block.hint = hintMatch[1].toLowerCase().replace(/s$/, '')
+    }
+  }
+
+  return blocks
+}
+
+function inferSchema(obj: Record<string, any>): string {
+  const keys = Object.keys(obj)
+  if (keys.includes('venture') && keys.includes('agent')) return 'decision'
+  if (keys.includes('title') && keys.includes('stage')) return 'task'
+  if (keys.includes('slug') && keys.includes('brand_type')) return 'venture'
+  if (keys.includes('name') && keys.includes('signal')) return 'competitor'
+  if (keys.includes('agent_id') && keys.includes('task')) return 'session'
+  return 'generic'
 }
 
 function escapeRegex(str: string): string {
