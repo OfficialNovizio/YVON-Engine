@@ -57,9 +57,13 @@ export { runHealthChecks } from './metrics/health-checks'
 export { scanProject, injectToon, toonifyAll } from './toon/auto'
 export { autoToonMiddleware } from './toon/auto/middleware'
 export { compressHermesMemory, computeHermesSessionDelta, compressHermesSkill, toonifyHermes } from './toon/auto/hermes-bridge'
+export { encodeDocument, encodeMemory, encodePrompt, generateDictionaryString, ABBREV_MAP } from './toon/auto/encoder'
+export { decodeToonResponse, parseDictionaryBlock, expandWithDictionary } from './toon/auto/decoder'
 export type { ToonContext, ToonMiddlewareOptions } from './toon/auto/middleware'
 export type { ProjectScan, InjectionPoint } from './toon/auto/scanner'
 export type { InjectionResult } from './toon/auto/injector'
+export type { ToonEncodeResult } from './toon/auto/encoder'
+export type { DecodedResult } from './toon/auto/decoder'
 
 // ─── Hermes ────────────────────────────────────────────────────────────────────
 

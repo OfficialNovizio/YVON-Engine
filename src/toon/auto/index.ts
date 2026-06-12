@@ -9,6 +9,8 @@
 export { scanProject } from './scanner'
 export { injectToon } from './injector'
 export { autoToonMiddleware } from './middleware'
+export { encodeDocument, encodeMemory, encodePrompt, generateDictionaryString, ABBREV_MAP } from './encoder'
+export { decodeToonResponse, parseDictionaryBlock, expandWithDictionary } from './decoder'
 export {
   compressHermesMemory,
   computeHermesSessionDelta,
@@ -19,6 +21,8 @@ export {
 export type { ProjectScan, InjectionPoint, ProjectDictionary, DiscoveredSchema } from './scanner'
 export type { InjectionResult } from './injector'
 export type { ToonContext, ToonMiddlewareOptions } from './middleware'
+export type { ToonEncodeResult } from './encoder'
+export type { DecodedResult } from './decoder'
 export type {
   CompressedHermesMemory,
   SessionDeltaState,

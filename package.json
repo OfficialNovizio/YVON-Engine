@@ -10,6 +10,8 @@
     "./toon": "./dist/toon/index.js",
     "./toon/auto": "./dist/toon/auto/index.js",
     "./toon/auto/middleware": "./dist/toon/auto/middleware.js",
+    "./toon/auto/decoder": "./dist/toon/auto/decoder.js",
+    "./toon/auto/encoder": "./dist/toon/auto/encoder.js",
     "./agents": "./dist/agents/index.js",
     "./algorithms": "./dist/algorithms/index.js",
     "./adapters": "./dist/adapters/index.js",

@@ -9,6 +9,7 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs'
 import { join, dirname, relative } from 'path'
 import type { ProjectScan, InjectionPoint, ProjectDictionary, DiscoveredSchema } from './scanner'
+import { encodeDocument, encodeMemory, generateDictionaryString, ABBREV_MAP } from './encoder'
 
 export interface InjectionResult {
   injected: string[]     // Files modified
@@ -112,18 +113,22 @@ function generateSchemasFile(scan: ProjectScan, result: InjectionResult): void {
 function generateDictionaryFile(scan: ProjectScan, result: InjectionResult): void {
   const dictPath = join(scan.projectRoot, '.toon', 'dictionary.toon')
 
+  // Use the comprehensive ABBREV_MAP from encoder + project-specific terms
   const dict = scan.dictionary
   const lines: string[] = [
-    '# DICTIONARY — Project-specific abbreviation map',
-    '# Format: DICT v=venture1:0|venture2:1 a=agent1:0|agent2:1 s=status1:0|status2:1 x=action1:0|action2:1',
-    '# LLM instruction: Use codes instead of full text. Dictionary is injected into system prompt.',
+    '# DICTIONARY — Comprehensive abbreviation map for TOON compression',
+    '# Project-specific terms first, then global abbreviations',
     '',
     `DICT v=${Object.entries(dict.ventures).map(([k, v]) => `${k}:${v}`).join('|')}`,
     `DICT a=${Object.entries(dict.agents).map(([k, v]) => `${k}:${v}`).join('|')}`,
     `DICT s=${Object.entries(dict.statuses).map(([k, v]) => `${k}:${v}`).join('|')}`,
     `DICT x=${Object.entries(dict.actions).map(([k, v]) => `${k}:${v}`).join('|')}`,
-    `DICT t=${Object.entries(dict.commonTerms).map(([k, v]) => `${k}:${v}`).join('|')}`,
   ]
+
+  // Add encoder's comprehensive abbreviation map
+  for (const [full, abbr] of Object.entries(ABBREV_MAP).sort((a, b) => b[0].length - a[0].length)) {
+    lines.push(`DICT t=${full}:${abbr}`)
+  }
 
   writeFileSync(dictPath, lines.join('\n'))
   result.created.push(relative(scan.projectRoot, dictPath))
@@ -250,6 +255,12 @@ function injectApiRoute(scan: ProjectScan, point: InjectionPoint, result: Inject
     return
   }
 
+  // SAFETY: Skip routes with dangerous patterns that injection would break
+  if (content.includes('if (error)') || content.includes('if (err)')) {
+    result.skipped.push(`${relative(scan.projectRoot, point.path)} (unsafe — error handling without braces)`)
+    return
+  }
+
   // Add TOON response format support via Accept header
   // Find: return Response.json( or return NextResponse.json(
   const jsonRe = /(return\s+(?:Response|NextResponse)\.json\()/g
@@ -266,7 +277,7 @@ function injectApiRoute(scan: ProjectScan, point: InjectionPoint, result: Inject
       }
     }
 
-    // Add Accept header check for TOON format
+    // Add Accept header check for TOON format — only before braced return blocks
     const acceptCheck = `
   // TOON response format — auto-injected by yvon-engine
   const acceptHeader = request.headers.get('accept') || ''
@@ -312,35 +323,13 @@ function compressDocuments(scan: ProjectScan, result: InjectionResult): void {
   }
 }
 
-function compressDocumentToToon(content: string, path: string, dict: ProjectDictionary): string {
-  const lines: string[] = []
-  const fileName = path.split('/').pop()?.replace(/\.[^.]+$/, '') || 'doc'
-
-  // TOON document header
-  lines.push(`#DOC id=${fileName} source=${path} format=toon-doc compressed=${new Date().toISOString()}`)
-  lines.push('')
-
-  // Extract sections (## headings become TOON sections)
-  const sections = content.split(/^##\s+/m)
-  for (const section of sections) {
-    if (!section.trim()) continue
-    const headerEnd = section.indexOf('\n')
-    const header = headerEnd > 0 ? section.slice(0, headerEnd).trim() : section.trim()
-    const body = headerEnd > 0 ? section.slice(headerEnd + 1).trim() : ''
-
-    // Compress body: replace common terms with abbreviations
-    let compressed = body
-    for (const [term, abbr] of Object.entries(dict.commonTerms)) {
-      const re = new RegExp(`\\b${term}\\b`, 'gi')
-      compressed = compressed.replace(re, abbr)
-    }
-
-    // TOON section: S|header|compressed_body (single line)
-    const cleanBody = compressed.replace(/\n+/g, ' // ').replace(/\|/g, '\\|').slice(0, 500)
-    lines.push(`S|${header}|${cleanBody}`)
-  }
-
-  return lines.join('\n')
+function compressDocumentToToon(content: string, path: string, _dict: ProjectDictionary): string {
+  const result = encodeDocument(content, path)
+  // Return TOON-encoded section records
+  return [
+    `#DOC source=${path} savings=${result.savingsPercent}% compressed=${new Date().toISOString()}`,
+    ...result.records,
+  ].join('\n')
 }
 
 // ─── Memory Compression ───────────────────────────────────────────────────────
@@ -366,36 +355,16 @@ function compressMemories(scan: ProjectScan, result: InjectionResult): void {
   }
 }
 
-function compressMemoryToToon(content: string, path: string, dict: ProjectDictionary): string {
-  const lines: string[] = []
-
+function compressMemoryToToon(content: string, path: string, _dict: ProjectDictionary): string {
   // Extract agent name from path (e.g., agent-department/CEO/marcus/MEMORY.md → marcus)
   const pathParts = path.split('/')
   const agentName = pathParts[pathParts.length - 2] || 'unknown'
 
-  lines.push(`#MEM id=${agentName} source=${path}`)
-
-  // Extract memory entries (lines with dates or key-value patterns)
-  const entries = content.split('\n').filter(line => {
-    const trimmed = line.trim()
-    return trimmed && !trimmed.startsWith('#') && !trimmed.startsWith('---')
-  })
-
-  for (const entry of entries) {
-    // Compress: replace common terms
-    let compressed = entry.trim()
-    for (const [term, abbr] of Object.entries(dict.commonTerms)) {
-      const re = new RegExp(`\\b${term}\\b`, 'gi')
-      compressed = compressed.replace(re, abbr)
-    }
-
-    // Truncate long entries
-    if (compressed.length > 200) compressed = compressed.slice(0, 200)
-
-    lines.push(`M|${agentName}|${compressed}`)
-  }
-
-  return lines.join('\n')
+  const result = encodeMemory(content, agentName)
+  return [
+    `#MEM id=${agentName} source=${path} savings=${result.savingsPercent}%`,
+    ...result.records,
+  ].join('\n')
 }
 
 // ─── Config Updater ───────────────────────────────────────────────────────────

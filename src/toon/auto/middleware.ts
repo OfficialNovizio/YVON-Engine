@@ -12,8 +12,9 @@
 //
 // Zero overhead when TOON is disabled (single boolean check).
 
-import { existsSync, readFileSync } from 'fs'
+import { existsSync, readFileSync, readdirSync } from 'fs'
 import { join } from 'path'
+import { encodePrompt, ABBREV_MAP, abbreviateText } from './encoder'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -117,76 +118,29 @@ function loadTermMap(root: string): Record<string, string> {
   if (existsSync(dictPath)) {
     try {
       const content = readFileSync(dictPath, 'utf-8')
-      const termLine = content.split('\n').find(l => l.startsWith('DICT t='))
-      if (termLine) {
-        const terms = termLine.replace('DICT t=', '')
-        _termMapCache = {}
-        for (const pair of terms.split('|')) {
-          const [term, abbr] = pair.split(':')
-          if (term && abbr) _termMapCache[term] = abbr
+      const dictTerms: Record<string, string> = {}
+      for (const line of content.split('\n')) {
+        if (line.startsWith('DICT t=')) {
+          const terms = line.replace('DICT t=', '')
+          for (const pair of terms.split('|')) {
+            const [term, abbr] = pair.split(':')
+            if (term && abbr) dictTerms[term] = abbr
+          }
         }
+      }
+      if (Object.keys(dictTerms).length > 0) {
+        _termMapCache = dictTerms
         return _termMapCache
       }
     } catch {}
   }
 
-  // Built-in fallback dictionary
-  _termMapCache = getBuiltinTermMap()
+  // Use comprehensive ABBREV_MAP from encoder
+  _termMapCache = ABBREV_MAP
   return _termMapCache
 }
 
-function getBuiltinTermMap(): Record<string, string> {
-  return {
-    'approve': 'ap', 'approved': 'ap', 'approval': 'ap',
-    'competitor': 'cp', 'competitors': 'cp',
-    'campaign': 'cg', 'campaigns': 'cg',
-    'review': 'rv', 'reviewed': 'rv',
-    'security': 'sec',
-    'social': 'soc',
-    'analytics': 'anl',
-    'strategy': 'str',
-    'newsletter': 'nl',
-    'production': 'prd',
-    'pipeline': 'pl',
-    'decision': 'dec',
-    'venture': 'vtr',
-    'agent': 'agt',
-    'session': 'ses',
-    'memory': 'mem',
-    'document': 'doc',
-    'knowledge': 'knw',
-    'context': 'ctx',
-    'response': 'rsp',
-    'generate': 'gen',
-    'content': 'cnt',
-    'marketing': 'mkt',
-    'finance': 'fin',
-    'technical': 'tec',
-    'deployment': 'dpl',
-    'configuration': 'cfg',
-    'novizio': 'nv',
-    'hourbour': 'hb',
-    'description': 'dsc',
-    'performance': 'perf',
-    'intelligence': 'intel',
-    'recommendation': 'rec',
-    'optimization': 'opt',
-    'implementation': 'impl',
-    'integration': 'intg',
-    'authentication': 'auth',
-    'authorization': 'authz',
-    'infrastructure': 'infra',
-    'notification': 'notif',
-    'subscription': 'sub',
-    'transaction': 'txn',
-    'dashboard': 'dash',
-    'schedule': 'sched',
-    'calendar': 'cal',
-    'template': 'tmpl',
-    'workflow': 'wfl',
-    'metadata': 'meta',
-  }
-}
+// getBuiltinTermMap removed — replaced by ABBREV_MAP from encoder
 
 function generateInlineDictionary(): string {
   return `DICT v=novizio:0|hourbour:1|yvon-dashboard:2
@@ -197,23 +151,19 @@ DICT x=approved:0|deferred:1|rejected:2|pending:3`
 
 // ─── Text Compressor ──────────────────────────────────────────────────────────
 
-function compressText(text: string, termMap: Record<string, string>): string {
-  let result = text
+function compressText(text: string, _termMap: Record<string, string>): string {
+  // Use the real encoder for structured prompt compression
+  const result = encodePrompt(text)
 
-  // Sort terms by length (longest first) to avoid partial matches
-  const sorted = Object.entries(termMap).sort((a, b) => b[0].length - a[0].length)
-
-  for (const [term, abbr] of sorted) {
-    // Only replace whole words, not substrings
-    const re = new RegExp(`\\b${escapeRegex(term)}\\b`, 'gi')
-    result = result.replace(re, abbr)
+  // If encoder found structure, return TOON records
+  if (result.records.length > 1) {
+    return result.compressed
   }
 
-  // Remove excessive whitespace
-  result = result.replace(/\s+/g, ' ').trim()
-
-  // Remove common filler phrases
-  result = result
+  // Fallback: comprehensive abbreviation substitution
+  return abbreviateText(text)
+    .replace(/\s+/g, ' ').trim()
+    // Remove filler phrases
     .replace(/please note that /gi, '')
     .replace(/I would like to /gi, '')
     .replace(/can you please /gi, '')
@@ -221,8 +171,6 @@ function compressText(text: string, termMap: Record<string, string>): string {
     .replace(/I need you to /gi, '')
     .replace(/I want you to /gi, '')
     .replace(/would you be able to /gi, '')
-
-  return result
 }
 
 function escapeRegex(str: string): string {
@@ -267,7 +215,7 @@ function findRelevantToonDocs(root: string, userMessage: string, agentId?: strin
 function scanToonFiles(dir: string): string[] {
   const files: string[] = []
   try {
-    for (const entry of require('fs').readdirSync(dir, { withFileTypes: true })) {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
       const full = join(dir, entry.name)
       if (entry.isDirectory()) {
         files.push(...scanToonFiles(full))
