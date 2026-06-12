@@ -5,40 +5,93 @@ exports.getHermesMemoryContext = getHermesMemoryContext;
 exports.getHermesStandards = getHermesStandards;
 exports.getHermesContextForTask = getHermesContextForTask;
 // lib/cie/sources/hermes-memory.ts — Hermes cross-session memory source
+// 
+// Vercel-ready: engine.bin is now git-tracked and shipped to production.
+// Falls back to local ~/.hermes/ files on VPS for freshness.
+// On Vercel: reads USER.md + MEMORY.md data from engine.bin chunks.
 const fs_1 = require("fs");
 const path_1 = require("path");
+const os_1 = require("os");
 const config_1 = require("../../adapters/config");
-let userCache = null;
-let memoryCache = null;
-let userMtime = 0;
-let memoryMtime = 0;
-function getUserPath() { return (0, path_1.join)((0, config_1.getConfig)().hermesMemoryDir, 'USER.md'); }
-function getMemoryPath() { return (0, path_1.join)((0, config_1.getConfig)().hermesMemoryDir, 'MEMORY.md'); }
-function readCachedFile(path, cacheVal, cacheMtime) {
-    if (!(0, fs_1.existsSync)(path))
-        return { content: '', mtime: 0 };
-    const mtime = (0, fs_1.statSync)(path).mtimeMs;
-    if (cacheVal !== null && cacheMtime === mtime)
-        return { content: cacheVal, mtime };
-    return { content: (0, fs_1.readFileSync)(path, 'utf-8'), mtime };
+let _engineData = null;
+let _engineLoaded = false;
+function loadEngineData() {
+    if (_engineLoaded)
+        return _engineData;
+    _engineLoaded = true;
+    // Try engine.bin first (works on both VPS and Vercel since it's git-tracked)
+    const paths = [
+        (0, path_1.join)(process.cwd(), '.toon', 'v3', 'engine.bin'),
+        (0, path_1.join)(process.cwd(), '..', '.toon', 'v3', 'engine.bin'),
+    ];
+    for (const p of paths) {
+        if ((0, fs_1.existsSync)(p)) {
+            try {
+                _engineData = JSON.parse((0, fs_1.readFileSync)(p, 'utf-8'));
+                return _engineData;
+            }
+            catch { /* corrupt, fall through */ }
+        }
+    }
+    return null;
 }
 function getHermesUserContext() {
-    const { content, mtime } = readCachedFile(getUserPath(), userCache, userMtime);
-    userCache = content;
-    userMtime = mtime;
-    return content.slice(0, 300);
+    // 1. Try engine.bin (shipped to Vercel)
+    const engine = loadEngineData();
+    if (engine?.chunks) {
+        const userChunk = engine.chunks.find((c) => c.docId === 'hermes/memories/USER');
+        if (userChunk)
+            return userChunk.body.slice(0, 300);
+    }
+    // 2. Fallback: local ~/.hermes/ (VPS only)
+    const localPath = (0, path_1.join)((0, config_1.getConfig)().hermesMemoryDir || (0, path_1.join)((0, os_1.homedir)(), '.hermes', 'memories'), 'USER.md');
+    if ((0, fs_1.existsSync)(localPath)) {
+        try {
+            return (0, fs_1.readFileSync)(localPath, 'utf-8').slice(0, 300);
+        }
+        catch { /* ignore */ }
+    }
+    return '';
 }
 function getHermesMemoryContext(keywords) {
-    const { content, mtime } = readCachedFile(getMemoryPath(), memoryCache, memoryMtime);
-    memoryCache = content;
-    memoryMtime = mtime;
-    if (!content)
-        return '';
-    const entries = content.split('§').filter(Boolean);
-    const matches = entries.filter(entry => keywords.some(k => entry.toLowerCase().includes(k.toLowerCase())));
-    return matches.join('\n\n').slice(0, 400);
+    // 1. Try engine.bin
+    const engine = loadEngineData();
+    if (engine?.chunks) {
+        const memChunks = engine.chunks.filter((c) => c.docId === 'hermes/memories/MEMORY');
+        if (memChunks.length > 0) {
+            const body = memChunks[0].body;
+            const entries = body.split('§').filter(Boolean);
+            const matches = entries.filter((entry) => keywords.some(k => entry.toLowerCase().includes(k.toLowerCase())));
+            return matches.join('\n\n').slice(0, 400);
+        }
+    }
+    // 2. Fallback: local ~/.hermes/ (VPS only)
+    const localPath = (0, path_1.join)((0, config_1.getConfig)().hermesMemoryDir || (0, path_1.join)((0, os_1.homedir)(), '.hermes', 'memories'), 'MEMORY.md');
+    if ((0, fs_1.existsSync)(localPath)) {
+        try {
+            const content = (0, fs_1.readFileSync)(localPath, 'utf-8');
+            const entries = content.split('§').filter(Boolean);
+            const matches = entries.filter((entry) => keywords.some(k => entry.toLowerCase().includes(k.toLowerCase())));
+            return matches.join('\n\n').slice(0, 400);
+        }
+        catch { /* ignore */ }
+    }
+    return '';
 }
 function getHermesStandards() {
+    // Pull standards from engine.bin if available
+    const engine = loadEngineData();
+    if (engine?.chunks) {
+        const standardsChunks = engine.chunks.filter((c) => c.docId.startsWith('hermes/') && c.body.includes('AUDIT GATE'));
+        if (standardsChunks.length > 0) {
+            // Extract bullet points from the first matching chunk
+            const lines = standardsChunks[0].body.split('\n').filter((l) => l.trim().startsWith('-') || l.trim().startsWith('AUDIT') || l.trim().startsWith('NO ') ||
+                l.trim().startsWith('TOON') || l.trim().startsWith('PLAN') || l.trim().startsWith('ADDITIVE'));
+            if (lines.length > 0)
+                return lines.map((l) => l.replace(/^-\s*/, '').trim());
+        }
+    }
+    // Hardcoded fallback (survives any deployment)
     return [
         'AUDIT GATE — run tsc+build+lint before every push',
         'NO FAKE DATA — real Supabase data or honest empty states only',
