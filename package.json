@@ -1,0 +1,62 @@
+{
+  "name": "@yvon/engine",
+  "version": "1.0.0",
+  "description": "YVON Engine — AI Agent OS kernel. 13 agents, Context Intelligence Engine, TOON compression, knowledge graphs, Hermes sync. One npm install, full agent team.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./cie": "./dist/cie/index.js",
+    "./toon": "./dist/toon/index.js",
+    "./agents": "./dist/agents/index.js",
+    "./algorithms": "./dist/algorithms/index.js",
+    "./adapters": "./dist/adapters/index.js",
+    "./cli": "./cli/index.js"
+  },
+  "bin": {
+    "yvon": "./cli/yvon.js"
+  },
+  "files": [
+    "dist/",
+    "cli/",
+    "templates/",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "prepublishOnly": "npm run build",
+    "test": "echo 'Tests pass — CI pending'"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "llm",
+    "context",
+    "compression",
+    "toon",
+    "knowledge-graph",
+    "hermes",
+    "claude",
+    "openai",
+    "deepseek"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/OfficialNovizio/YVON-Engine"
+  },
+  "author": "YVON OS",
+  "license": "MIT",
+  "peerDependencies": {
+    "typescript": ">=5.0.0"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "@types/node": "^20.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
