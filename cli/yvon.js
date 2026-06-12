@@ -221,10 +221,12 @@ function help() {
   console.log(`
 YVON Engine CLI v1.3.0
 
-  yvon init          One command to activate everything
+  yvon init          One command to activate everything (new projects)
+  yvon integrate     Wire engine into an existing project (safe, non-destructive)
   yvon doctor        Health check (all ✅ except external services)
   yvon graph         Rebuild knowledge graphs
   yvon agents        List all 13 agents
+  yvon dashboard     Open live dashboard (port 4200)
   yvon version       Show version
 `)
 }
@@ -450,6 +452,113 @@ function agents() {
   }
 }
 
+function integrate() {
+  const cwd = process.cwd()
+  const pkgPath = path.join(cwd, 'package.json')
+  
+  if (!fs.existsSync(pkgPath)) {
+    console.log('  ⚠️  No package.json found — not a Node.js project')
+    console.log('  Run: npx yvon init  (for new projects)')
+    process.exit(1)
+  }
+  
+  // ── Step 1: Check if @yvon/engine is installed ──────────────────────────
+  const enginePath = path.join(cwd, 'node_modules', '@yvon', 'engine')
+  const engineInstalled = fs.existsSync(enginePath)
+  
+  if (!engineInstalled) {
+    console.log('  📦 @yvon/engine not installed. Installing...')
+    const { execSync } = require('child_process')
+    try {
+      execSync('npm install github:OfficialNovizio/YVON-Engine', { cwd, stdio: 'inherit' })
+      console.log('  ✅ Installed\n')
+    } catch (e) {
+      console.log('  ❌ Install failed:', e.message)
+      process.exit(1)
+    }
+  }
+  
+  // ── Step 2: Map of local → engine imports ───────────────────────────────
+  const replacements = {
+    '@/lib/cie': '@yvon/engine/cie',
+    '@/lib/toon': '@yvon/engine/toon',
+    '@/lib/algorithms': '@yvon/engine/algorithms',
+  }
+  
+  const stats = { scanned: 0, patched: 0, already: 0, errors: 0 }
+  
+  // ── Step 3: Scan all TS/TSX files ────────────────────────────────────────
+  function scanDir(dir) {
+    if (!fs.existsSync(dir)) return
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (entry.name === 'node_modules' || entry.name === '.git' || 
+          entry.name === '.next' || entry.name === 'dist') continue
+      const full = path.join(dir, entry.name)
+      if (entry.isDirectory()) { scanDir(full) }
+      else if (/\.(ts|tsx)$/.test(entry.name)) {
+        stats.scanned++
+        let content = fs.readFileSync(full, 'utf-8')
+        let changed = false
+        
+        for (const [localPath, enginePath] of Object.entries(replacements)) {
+          const importRe = new RegExp(
+            `(from\\s+['"])${localPath.replace(/\//g, '\\/')}(['"])`, 'g'
+          )
+          const newContent = content.replace(importRe, `$1${enginePath}$2`)
+          if (newContent !== content) {
+            changed = true
+            content = newContent
+          }
+        }
+        
+        if (changed) {
+          // Only replace if the engine export exists
+          let safe = true
+          for (const enginePath of Object.values(replacements)) {
+            if (content.includes(enginePath)) {
+              // Verify the engine module exists
+              const modParts = enginePath.split('/')
+              const modFile = path.join(enginePath, 'dist', modParts.slice(1).join('/'), 'index.js')
+              const altFile = path.join(enginePath, 'dist', modParts.slice(1).join('/') + '.js')
+              if (!fs.existsSync(modFile) && !fs.existsSync(altFile)) {
+                // Module might not exist, check main entry
+                const mainFile = path.join(enginePath, 'dist', 'index.js')
+                if (!fs.existsSync(mainFile)) {
+                  safe = false
+                }
+              }
+            }
+          }
+          
+          if (safe) {
+            fs.writeFileSync(full, content, 'utf-8')
+            stats.patched++
+            console.log(`  ✅ ${path.relative(cwd, full)}`)
+          } else {
+            stats.errors++
+            console.log(`  ⚠️  ${path.relative(cwd, full)} — engine module not found, skipping`)
+          }
+        }
+      }
+    }
+  }
+  
+  console.log('\n  🔍 Scanning project for YVON imports...\n')
+  scanDir(cwd)
+  
+  // ── Step 4: Summary ──────────────────────────────────────────────────────
+  console.log(`\n  📊 ${stats.scanned} files scanned`)
+  if (stats.patched > 0) {
+    console.log(`  ✅ ${stats.patched} files patched to use @yvon/engine`)
+    console.log(`\n  🧪 Run: npm run build   (verify nothing broke)`)
+  } else {
+    console.log(`  ℹ️  No files needed patching — already using engine or no CIE imports found`)
+    console.log(`\n  💡 Tip: Import CIE with: import { buildCieContext } from '@yvon/engine/cie'`)
+  }
+  if (stats.errors > 0) console.log(`  ⚠️  ${stats.errors} files skipped (engine modules not available)`)
+  console.log('')
+}
+
 function version() { console.log('YVON Engine v1.3.0') }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -460,7 +569,7 @@ function countAgents(d) { if (!fs.existsSync(d)) return '0'; let c = 0; for (con
 
 // ─── Dispatch ──────────────────────────────────────────────────────────────
 
-const cmds = { init, doctor, graph, agents, dashboard, version }
+const cmds = { init, doctor, graph, agents, dashboard, integrate, version }
 ;(cmds[command] || help)()
 
 function dashboard() {
