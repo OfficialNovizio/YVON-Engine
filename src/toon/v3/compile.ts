@@ -112,7 +112,10 @@ export function compile(options: CompileOptions): CompileResult {
     for (const c of chunks) {
       if (c.level <= 2) treeLines.push(`${'#'.repeat(c.level)} ${c.heading}`)
       c.hash = hashChunk(c.body)
-      c.keywords = extractKeywords(c.body + ' ' + c.heading)
+      // Only extract keywords if not already set (fallback chunks have pre-set keywords)
+      if (c.keywords.length === 0) {
+        c.keywords = extractKeywords(c.body + ' ' + c.heading)
+      }
       c.bigrams = extractBigrams(c.keywords)
       allChunks.push(c)
       chunkId++
