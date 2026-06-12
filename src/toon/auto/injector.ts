@@ -288,41 +288,22 @@ function injectApiRoute(scan: ProjectScan, point: InjectionPoint, result: Inject
     return
   }
 
-  // Add TOON import if missing
+  // SAFETY: Only inject TOON import — response injection is too fragile
+  // The import enables manual `toon.api()` calls; auto-injection of response
+  // formatting often breaks because `data` and `request` scope varies per route.
   if (!content.includes('yvon-engine/toon')) {
     const toonImport = `import { toon } from 'yvon-engine/toon'\n`
     const firstImport = content.match(/^import\s+.+$/m)
     if (firstImport) {
       const pos = firstImport.index! + firstImport[0].length
       content = content.slice(0, pos) + '\n' + toonImport + content.slice(pos + 1)
-    } else {
-      content = toonImport + content
+      writeFileSync(point.path, content)
+      result.injected.push(`${relative(scan.projectRoot, point.path)} (TOON import added)`)
+      result.summary.injectionPointsHit++
+      return
     }
   }
-
-  // Add safe TOON response check
-  const acceptCheck = `
-  // TOON response format — auto-injected by yvon-engine v1.4.0
-  try {
-    const acceptHeader = request.headers.get('accept') || ''
-    if (acceptHeader.includes('application/toon') || acceptHeader.includes('text/toon')) {
-      const items = [data as unknown as Record<string, unknown>]
-      const toonResult = toon.api ? toon.api(items, '${point.path.split('/').pop()?.replace('route.', '') || 'generic'}') : JSON.stringify(data)
-      return new Response(toonResult, { headers: { 'Content-Type': 'application/toon' } })
-    }
-  } catch {
-    // TOON not available — fall through to JSON
-  }
-`
-  // Insert before the return Response.json
-  content = content.replace(
-    /(\s*)(return\s+(?:Response|NextResponse)\.json\()/,
-    acceptCheck + '\n$1$2'
-  )
-
-  writeFileSync(point.path, content)
-  result.injected.push(relative(scan.projectRoot, point.path))
-  result.summary.injectionPointsHit++
+  result.skipped.push(`${relative(scan.projectRoot, point.path)} (TOON import already present)`)
 }
 
 // ─── Document Compression ─────────────────────────────────────────────────────
