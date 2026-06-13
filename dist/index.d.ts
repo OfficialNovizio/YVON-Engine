@@ -39,6 +39,7 @@ export type { WriteTarget, WriteResult } from './toon/v3/sync-writer';
 export { readDoc, readDocsForLLM, readDocForHuman, getToonPath, getHumanPath, docStats } from './toon/v3/dual-docs';
 export type { DualDocStats } from './toon/v3/dual-docs';
 export { syncWithHermes, pushToHermes } from './adapters/hermes-sync';
+import { compress } from './toon/compressor';
 export interface EngineOptions {
     projectRoot?: string;
     configPath?: string;
@@ -46,21 +47,20 @@ export interface EngineOptions {
     provider?: string;
 }
 export declare function createEngine(options?: EngineOptions): {
-    config: any;
+    config: import("./adapters/config").EngineConfig;
     cie: {
         buildContext: (params: {
             agentId: string;
             task: string;
             venture?: string;
-        }) => any;
+        }) => import("./cie").CieContext;
     };
     toon: {
-        dense: any;
-        compress: any;
-        delta: any;
+        dense: (items: Record<string, unknown>[], schemaOrType: import("./toon/toon").ToonSchema | string) => string;
+        compress: typeof compress;
     };
     agents: {
-        getPersonality: (agentId: string) => any;
+        getPersonality: (agentId: string) => string;
     };
     version: string;
 };

@@ -82,7 +82,7 @@ var decoder_1 = require("./toon/auto/decoder");
 Object.defineProperty(exports, "decodeToonResponse", { enumerable: true, get: function () { return decoder_1.decodeToonResponse; } });
 Object.defineProperty(exports, "parseDictionaryBlock", { enumerable: true, get: function () { return decoder_1.parseDictionaryBlock; } });
 Object.defineProperty(exports, "expandWithDictionary", { enumerable: true, get: function () { return decoder_1.expandWithDictionary; } });
-// ─── TOON v2 — Structure Stripper ─────────────────────────────────────────────
+// ─── TOON v2 — Structure Stripper (⚠️ DEPRECATED — use v3 engine) ────────────
 var stripper_1 = require("./toon/v2/stripper");
 Object.defineProperty(exports, "strip", { enumerable: true, get: function () { return stripper_1.strip; } });
 // ─── TOON v3 — Query-Aware Progressive Engine ────────────────────────────────
@@ -116,22 +116,28 @@ Object.defineProperty(exports, "docStats", { enumerable: true, get: function () 
 var hermes_sync_1 = require("./adapters/hermes-sync");
 Object.defineProperty(exports, "syncWithHermes", { enumerable: true, get: function () { return hermes_sync_1.syncWithHermes; } });
 Object.defineProperty(exports, "pushToHermes", { enumerable: true, get: function () { return hermes_sync_1.pushToHermes; } });
+// ─── Engine creator ───────────────────────────────────────────────────────────
+const config_2 = require("./adapters/config");
+const cie_2 = require("./cie");
+const toon_2 = require("./toon/toon");
+const compressor_2 = require("./toon/compressor");
+const personalities_1 = require("./agents/personalities");
+const package_json_1 = require("../package.json");
 function createEngine(options = {}) {
-    const config = require('./adapters/config').getConfig();
+    const config = (0, config_2.getConfig)();
     return {
         config,
         cie: {
-            buildContext: (params) => require('./cie').buildCieContext(params),
+            buildContext: (params) => (0, cie_2.buildCieContext)(params),
         },
         toon: {
-            dense: require('./toon/toon').toon.dense,
-            compress: require('./toon/compressor').compress,
-            delta: require('./toon/delta').createDeltaTracker,
+            dense: toon_2.toon.dense,
+            compress: compressor_2.compress,
         },
         agents: {
-            getPersonality: (agentId) => require('./agents/personalities').getPersonalityExtension(agentId),
+            getPersonality: (agentId) => (0, personalities_1.getPersonalityExtension)(agentId),
         },
-        version: '1.0.0',
+        version: package_json_1.version,
     };
 }
 //# sourceMappingURL=index.js.map

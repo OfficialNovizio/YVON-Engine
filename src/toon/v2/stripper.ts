@@ -1,5 +1,10 @@
 // src/toon/v2/stripper.ts — Markdown Structure Stripper
 //
+// ⚠️ DEPRECATED — TOON v3 (src/toon/v3/) supersedes this with query-aware
+// progressive loading that achieves better savings with less information loss.
+// v2 remains available for backward compatibility but will be removed in v2.0.
+// Migrate to: import { createV3Engine } from 'toongine' or use autoToonMiddleware.
+//
 // O(n) single-pass state machine. Strips all formatting the LLM doesn't need:
 //   - Markdown syntax (#, *, `, |, -, >, ---)
 //   - Code blocks → [CODE:lang:LOC]

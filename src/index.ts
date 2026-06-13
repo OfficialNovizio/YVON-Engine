@@ -65,7 +65,7 @@ export type { InjectionResult } from './toon/auto/injector'
 export type { ToonEncodeResult } from './toon/auto/encoder'
 export type { DecodedResult } from './toon/auto/decoder'
 
-// ─── TOON v2 — Structure Stripper ─────────────────────────────────────────────
+// ─── TOON v2 — Structure Stripper (⚠️ DEPRECATED — use v3 engine) ────────────
 
 export { strip } from './toon/v2/stripper'
 export type { StripResult } from './toon/v2/stripper'
@@ -92,6 +92,13 @@ export { syncWithHermes, pushToHermes } from './adapters/hermes-sync'
 
 // ─── Engine creator ───────────────────────────────────────────────────────────
 
+import { getConfig } from './adapters/config'
+import { buildCieContext } from './cie'
+import { toon } from './toon/toon'
+import { compress } from './toon/compressor'
+import { getPersonalityExtension } from './agents/personalities'
+import { version as pkgVersion } from '../package.json'
+
 export interface EngineOptions {
   projectRoot?: string
   configPath?: string
@@ -100,23 +107,22 @@ export interface EngineOptions {
 }
 
 export function createEngine(options: EngineOptions = {}) {
-  const config = require('./adapters/config').getConfig()
+  const config = getConfig()
   
   return {
     config,
     cie: {
       buildContext: (params: { agentId: string; task: string; venture?: string }) =>
-        require('./cie').buildCieContext(params),
+        buildCieContext(params),
     },
     toon: {
-      dense: require('./toon/toon').toon.dense,
-      compress: require('./toon/compressor').compress,
-      delta: require('./toon/delta').createDeltaTracker,
+      dense: toon.dense,
+      compress,
     },
     agents: {
       getPersonality: (agentId: string) =>
-        require('./agents/personalities').getPersonalityExtension(agentId),
+        getPersonalityExtension(agentId),
     },
-    version: '1.0.0',
+    version: pkgVersion,
   }
 }
