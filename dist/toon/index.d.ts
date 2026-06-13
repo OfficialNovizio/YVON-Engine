@@ -19,4 +19,6 @@ export { writeFile, deleteFile, writeMany } from './v3/sync-writer';
 export type { WriteTarget, WriteResult } from './v3/sync-writer';
 export { readDoc, readDocsForLLM, readDocForHuman, getToonPath, getHumanPath, docStats } from './v3/dual-docs';
 export type { DualDocStats } from './v3/dual-docs';
+export { summarize, formatStatHeader, formatTopN, stratify, injectDelta, storeForExpand, expand } from './v4/stratify';
+export type { NumericStats, StringStats, StatProfile, StratifiedPayload } from './v4/stratify';
 //# sourceMappingURL=index.d.ts.map

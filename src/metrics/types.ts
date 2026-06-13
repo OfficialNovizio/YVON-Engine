@@ -180,3 +180,12 @@ export interface HealthScore {
     agents: { ok: boolean; inactiveCount: number }
   }
 }
+
+export interface FailureRecord {
+  timestamp: number
+  module: string           // 'engine' | 'stratify' | 'middleware' | 'cie' | 'compile'
+  operation: string        // 'process' | 'stratify' | 'inject' | 'classify'
+  error: string            // error message
+  stack?: string           // stack trace (truncated)
+  context?: string         // JSON of relevant context (sessionId, query hash, etc.)
+}

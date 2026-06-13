@@ -18,6 +18,7 @@ class MetricsCollector {
         this.engineQueries = [];
         this.cieTicks = [];
         this.compileRecords = [];
+        this.failures = [];
         this.moduleStatuses = new Map();
         this.agentActivities = new Map();
     }
@@ -63,6 +64,17 @@ class MetricsCollector {
     }
     setModuleStatus(status) {
         this.moduleStatuses.set(status.name, status);
+    }
+    recordFailure(failure) {
+        this.failures.push(failure);
+        if (this.failures.length > 1000)
+            this.failures.shift();
+    }
+    getFailures(limit = 50) {
+        return this.failures.slice(-limit);
+    }
+    getFailureCount(since = 0) {
+        return this.failures.filter(f => f.timestamp >= since).length;
     }
     setAgentActivity(activity) {
         this.agentActivities.set(activity.agentId, activity);

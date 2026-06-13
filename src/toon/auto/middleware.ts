@@ -18,6 +18,7 @@ import { encodePrompt, ABBREV_MAP, abbreviateText } from './encoder'
 import { toon } from '../toon'
 import { createEngine } from '../v3/engine'
 import type { V3Engine } from '../v3/engine'
+import { metrics } from '../../metrics/collector'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -42,6 +43,7 @@ export interface ToonMiddlewareOptions {
   agentId?: string | null
   ventureId?: string | null
   projectRoot?: string
+  sessionId?: string  // Wire session tracking for delta compression
 }
 
 // ─── Caches ───────────────────────────────────────────────────────────────────
@@ -94,14 +96,39 @@ function middlewareV3(options: ToonMiddlewareOptions, root: string): ToonContext
   const engine = _v3Engine!
   const dict = loadDictionary(root)
   
-  // Run v3 engine process
-  const result = engine.process({
-    systemPrompt: options.systemPrompt,
-    userMessage: options.userMessage,
-    agentId: options.agentId,
-    ventureId: options.ventureId,
-    sessionId: undefined, // TODO: wire session tracking
-  })
+  // Run v3 engine process — with session delta tracking + failure tracking
+  const sid = options.sessionId || (options.agentId && options.ventureId 
+    ? require('crypto').createHash('sha256').update(options.agentId + ':' + options.ventureId).digest('hex').slice(0, 12)
+    : undefined)
+  
+  let result: ReturnType<typeof engine.process>
+  try {
+    result = engine.process({
+      systemPrompt: options.systemPrompt,
+      userMessage: options.userMessage,
+      agentId: options.agentId,
+      ventureId: options.ventureId,
+      sessionId: sid,
+    })
+  } catch (err: any) {
+    metrics.recordFailure({
+      timestamp: Date.now(),
+      module: 'middleware',
+      operation: 'engine.process',
+      error: err?.message || String(err),
+      stack: err?.stack?.slice(0, 200),
+      context: JSON.stringify({ sessionId: sid, agentId: options.agentId }),
+    })
+    // Degrade gracefully
+    return {
+      compressedUserMessage: options.userMessage,
+      dictionary: dict,
+      relevantDocs: '',
+      relevantMemory: '',
+      outputInstruction: '',
+      stats: { originalLength: options.userMessage.length, compressedLength: options.userMessage.length, savingsPercent: 0, docsInjected: 0, memoryEntries: 0 },
+    }
+  }
   
   return {
     compressedUserMessage: result.compressedUserMessage || options.userMessage,

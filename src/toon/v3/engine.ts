@@ -287,7 +287,8 @@ export function createEngine(binPath: string) {
     for (const w of currWords) {
       if (prevWords.has(w)) overlap++
     }
-    return (overlap / currWords.size) < 0.4
+    // Lowered from 0.4 → 0.2: more aggressive delta across similar queries
+    return (overlap / currWords.size) < 0.2
   }
 
   // ─── Full Process (one call does everything) ───────────────────────────────

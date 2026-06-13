@@ -19,6 +19,7 @@ const path_1 = require("path");
 const encoder_1 = require("./encoder");
 const toon_1 = require("../toon");
 const engine_1 = require("../v3/engine");
+const collector_1 = require("../../metrics/collector");
 // ─── Caches ───────────────────────────────────────────────────────────────────
 let _dictionaryCache = null;
 let _dictionaryCacheTime = 0;
@@ -60,14 +61,39 @@ function autoToonMiddleware(options) {
 function middlewareV3(options, root) {
     const engine = _v3Engine;
     const dict = loadDictionary(root);
-    // Run v3 engine process
-    const result = engine.process({
-        systemPrompt: options.systemPrompt,
-        userMessage: options.userMessage,
-        agentId: options.agentId,
-        ventureId: options.ventureId,
-        sessionId: undefined, // TODO: wire session tracking
-    });
+    // Run v3 engine process — with session delta tracking + failure tracking
+    const sid = options.sessionId || (options.agentId && options.ventureId
+        ? require('crypto').createHash('sha256').update(options.agentId + ':' + options.ventureId).digest('hex').slice(0, 12)
+        : undefined);
+    let result;
+    try {
+        result = engine.process({
+            systemPrompt: options.systemPrompt,
+            userMessage: options.userMessage,
+            agentId: options.agentId,
+            ventureId: options.ventureId,
+            sessionId: sid,
+        });
+    }
+    catch (err) {
+        collector_1.metrics.recordFailure({
+            timestamp: Date.now(),
+            module: 'middleware',
+            operation: 'engine.process',
+            error: err?.message || String(err),
+            stack: err?.stack?.slice(0, 200),
+            context: JSON.stringify({ sessionId: sid, agentId: options.agentId }),
+        });
+        // Degrade gracefully
+        return {
+            compressedUserMessage: options.userMessage,
+            dictionary: dict,
+            relevantDocs: '',
+            relevantMemory: '',
+            outputInstruction: '',
+            stats: { originalLength: options.userMessage.length, compressedLength: options.userMessage.length, savingsPercent: 0, docsInjected: 0, memoryEntries: 0 },
+        };
+    }
     return {
         compressedUserMessage: result.compressedUserMessage || options.userMessage,
         dictionary: dict,

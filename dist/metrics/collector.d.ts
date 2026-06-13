@@ -1,10 +1,11 @@
-import type { ToonCall, EngineQuery, CompileRecord, CiePipelineTick, ModuleStatus, AgentActivity, ToonStats, EngineStats, CieStats, CostSummary, AgentEfficiency, WeeklyEfficiency, ContentTypeEfficiency, HealthScore, ProviderCost } from './types';
+import type { ToonCall, EngineQuery, CompileRecord, CiePipelineTick, ModuleStatus, AgentActivity, ToonStats, EngineStats, CieStats, CostSummary, AgentEfficiency, WeeklyEfficiency, ContentTypeEfficiency, HealthScore, ProviderCost, FailureRecord } from './types';
 declare class MetricsCollector {
     private enabled;
     private toonCalls;
     private engineQueries;
     private cieTicks;
     private compileRecords;
+    private failures;
     private moduleStatuses;
     private agentActivities;
     enable(): void;
@@ -15,6 +16,9 @@ declare class MetricsCollector {
     recordCompile(record: CompileRecord): void;
     recordCieTick(tick: CiePipelineTick): void;
     setModuleStatus(status: ModuleStatus): void;
+    recordFailure(failure: FailureRecord): void;
+    getFailures(limit?: number): FailureRecord[];
+    getFailureCount(since?: number): number;
     setAgentActivity(activity: AgentActivity): void;
     getModuleStatuses(): ModuleStatus[];
     getAllAgentActivities(): AgentActivity[];

@@ -8,7 +8,7 @@ import type {
   ToonCall, EngineQuery, CompileRecord, CiePipelineTick,
   ModuleStatus, AgentActivity, ToonStats, EngineStats, CieStats,
   CostSummary, AgentEfficiency, WeeklyEfficiency, ContentTypeEfficiency,
-  HealthScore, ProviderCost
+  HealthScore, ProviderCost, FailureRecord
 } from './types'
 import {
   persistToonCall, persistEngineQuery, persistCompileRecord,
@@ -31,6 +31,7 @@ class MetricsCollector {
   private engineQueries: EngineQuery[] = []
   private cieTicks: CiePipelineTick[] = []
   private compileRecords: CompileRecord[] = []
+  private failures: FailureRecord[] = []
   private moduleStatuses: Map<string, ModuleStatus> = new Map()
   private agentActivities: Map<string, AgentActivity> = new Map()
 
@@ -74,6 +75,19 @@ class MetricsCollector {
 
   setModuleStatus(status: ModuleStatus): void {
     this.moduleStatuses.set(status.name, status)
+  }
+
+  recordFailure(failure: FailureRecord): void {
+    this.failures.push(failure)
+    if (this.failures.length > 1000) this.failures.shift()
+  }
+
+  getFailures(limit: number = 50): FailureRecord[] {
+    return this.failures.slice(-limit)
+  }
+
+  getFailureCount(since: number = 0): number {
+    return this.failures.filter(f => f.timestamp >= since).length
   }
 
   setAgentActivity(activity: AgentActivity): void {

@@ -195,4 +195,12 @@ export interface HealthScore {
         };
     };
 }
+export interface FailureRecord {
+    timestamp: number;
+    module: string;
+    operation: string;
+    error: string;
+    stack?: string;
+    context?: string;
+}
 //# sourceMappingURL=types.d.ts.map

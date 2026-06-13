@@ -18,6 +18,7 @@ export interface ToonMiddlewareOptions {
     agentId?: string | null;
     ventureId?: string | null;
     projectRoot?: string;
+    sessionId?: string;
 }
 export declare function autoToonMiddleware(options: ToonMiddlewareOptions): ToonContext;
 //# sourceMappingURL=middleware.d.ts.map
