@@ -234,6 +234,9 @@ ToonGine CLI v1.5.0
   toongine rollback <ts> Restore from specific snapshot
   toongine sync --once   One-time sync: originals → .toon/
   toongine sync --watch  Auto-sync every 30s
+  toongine compile       Compile all .md → .toon (new compiler)
+  toongine compile --file <path>  Compile single file
+  toongine watch         Auto-compile on file changes (dev mode)
   toongine clean         Remove stale duplicates + reindex engine.bin
   toongine stats         Show dual-doc compression stats
   toongine version       Show version
@@ -441,6 +444,57 @@ function graph() {
 }
 
 function agents() {
+  const flag = process.argv[3]
+  const cwd = process.cwd()
+  
+  // --sync: sync all manifests → generate Hermes skills + TOON files
+  if (flag === '--sync') {
+    console.log('\n  🔄 Syncing agents from manifests...\n')
+    try {
+      const { loadRegistry } = require('../dist/agents/registry')
+      const reg = loadRegistry(cwd)
+      console.log(`  📋 ${reg.total} manifests loaded`)
+      console.log(`  ✅ ${reg.valid} valid`)
+      if (reg.errors > 0) {
+        console.log(`  ❌ ${reg.errors} errors:`)
+        reg.validations.filter(v => !v.valid).forEach(v => {
+          console.log(`     ${v.agent_id}: ${v.errors.join(', ')}`)
+        })
+      }
+      console.log(`\n  👥 Agent Registry:`)
+      reg.agents.forEach(a => {
+        console.log(`     ${a.agent.id.padEnd(28)} L${a.agent.level} ${a.agent.department}`)
+      })
+      console.log(`\n  ✅ Sync complete.\n`)
+    } catch(e) { console.log(`  ❌ ${e.message}\n`) }
+    return
+  }
+  
+  // --verify: verify all manifests
+  if (flag === '--verify') {
+    console.log('\n  🧪 Verifying all agents...\n')
+    try {
+      const { loadRegistry } = require('../dist/agents/registry')
+      const reg = loadRegistry(cwd)
+      const ok = reg.valid
+      const total = reg.total
+      const errors = reg.errors
+      console.log(`  ${ok}/${total} operational`)
+      if (errors > 0) {
+        console.log(`  ❌ ${errors} agents have errors`)
+        console.log('')
+        reg.validations.filter(v => !v.valid).forEach(v => {
+          console.log(`  ❌ ${v.agent_id}`)
+          v.errors.forEach(e => console.log(`     - ${e}`))
+        })
+      } else {
+        console.log('  ✅ All agents validated')
+      }
+      console.log('')
+    } catch(e) { console.log(`  ❌ ${e.message}\n`) }
+    return
+  }
+
   console.log('\n  👥 YVON Agents\n')
   const memDir = path.join(process.cwd(), 'agent-memory')
   if (!fs.existsSync(memDir)) { console.log('  Run: npx toongine init'); return }
@@ -678,7 +732,119 @@ function countAgents(d) { if (!fs.existsSync(d)) return '0'; let c = 0; for (con
 
 // ─── Dispatch ──────────────────────────────────────────────────────────────
 
-const cmds = { init, doctor, graph, agents, dashboard, integrate, absorb, rollback, sync, clean, stats, version }
+function compile() {
+  const cwd = process.cwd()
+  const flag = process.argv[3]
+  
+  if (flag === '--file') {
+    const file = process.argv[4]
+    if (!file) { console.log('  Usage: npx toongine compile --file <path>'); return }
+    try {
+      const { compileFile } = require('../dist/toon/compiler')
+      const result = compileFile(file, cwd)
+      if (result.error) {
+        console.log(`  ❌ ${file}: ${result.error}`)
+      } else {
+        console.log(`  ✅ ${file} → ${result.destPath}`)
+        console.log(`     ${(result.sourceSize/1024).toFixed(1)}KB → ${(result.compressedSize/1024).toFixed(1)}KB (${result.savingsPercent}%)`)
+      }
+    } catch(e) { console.log(`  ❌ ${e.message}`) }
+    return
+  }
+  
+  console.log('\n  🔨 TOON Compiler — Compiling all .md → .toon...\n')
+  try {
+    const { compileAll, buildDictionary } = require('../dist/toon/compiler')
+    // Try to load project dictionary, fall back to default
+    let dict = undefined
+    try { 
+      const db = require('../dist/toon/dictionary-builder')
+      dict = db.buildDictionary(cwd)
+    } catch {}
+    
+    const result = compileAll(cwd, dict)
+    console.log(`  📁 ${result.totalFiles} files found`)
+    console.log(`  ✅ ${result.compiled} compiled`)
+    if (result.errors > 0) console.log(`  ❌ ${result.errors} errors`)
+    console.log(`  📊 ${(result.totalSourceSize/1024).toFixed(1)} KB → ${(result.totalCompressedSize/1024).toFixed(1)} KB`)
+    console.log(`  💰 ${result.overallSavingsPercent}% per-file savings`)
+    console.log(`  ⏱️  ${result.durationMs}ms`)
+    
+    // Show bottom performers
+    const poor = result.results.filter(r => !r.error && r.savingsPercent < 30).slice(0, 5)
+    if (poor.length > 0) {
+      console.log(`\n  ⚠️  Low-compression files (<30%):`)
+      poor.forEach(r => console.log(`     ${r.savingsPercent}% ${r.sourcePath.slice(0, 70)}`))
+    }
+    console.log('')
+  } catch(e) { console.log(`  ❌ ${e.message}\n`) }
+}
+
+function watch() {
+  const cwd = process.cwd()
+  console.log('\n  👁️  TOON Watcher — Auto-compiling on changes...\n')
+  console.log('  Watching: agent-department/**, docs/**, CLAUDE.md')
+  console.log('  Press Ctrl+C to stop\n')
+  
+  try {
+    const { watch } = require('fs')
+    const { compileFile } = require('../dist/toon/compiler')
+    const { buildDictionary } = require('../dist/toon/dictionary-builder')
+    
+    const dirs = [
+      path.join(cwd, 'agent-department'),
+      path.join(cwd, 'docs'),
+    ]
+    
+    let dict = undefined
+    function refreshDict() {
+      try { dict = buildDictionary(cwd) } catch {}
+    }
+    refreshDict()
+    
+    function handleChange(filePath) {
+      const rel = path.relative(cwd, filePath)
+      if (!rel.endsWith('.md')) return
+      // Debounce: wait 500ms before compiling
+      clearTimeout(handleChange._timer)
+      handleChange._timer = setTimeout(() => {
+        try {
+          const result = compileFile(rel, cwd, dict)
+          if (result.error) {
+            console.log(`  ❌ ${rel}: ${result.error}`)
+          } else {
+            console.log(`  ✅ ${rel} → ${result.savingsPercent}% savings (${result.durationMs}ms)`)
+          }
+        } catch(e) { console.log(`  ❌ ${rel}: ${e.message}`) }
+      }, 500)
+    }
+    
+    for (const dir of dirs) {
+      if (fs.existsSync(dir)) {
+        watch(dir, { recursive: true }, (eventType, filename) => {
+          if (filename && filename.endsWith('.md')) {
+            handleChange(path.join(dir, filename))
+            refreshDict() // refresh dict on any change
+          }
+        })
+      }
+    }
+    
+    // Also watch CLAUDE.md
+    const claudePath = path.join(cwd, 'CLAUDE.md')
+    if (fs.existsSync(claudePath)) {
+      watch(claudePath, (eventType) => {
+        handleChange(claudePath)
+        refreshDict()
+      })
+    }
+    
+    // Keep alive
+    setInterval(() => {}, 60000)
+  } catch(e) { console.log(`  ❌ ${e.message}\n`) }
+}
+
+const cmds = { init, doctor, graph, agents, dashboard, integrate, absorb, rollback, sync, clean, stats, version, compile, watch }
 ;(cmds[command] || help)()
 
 // ── absorb ──────────────────────────────────────────────────────────────────

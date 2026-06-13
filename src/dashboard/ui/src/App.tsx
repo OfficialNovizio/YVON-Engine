@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { usePolling } from './hooks/usePolling';
 import { useWebSocket } from './hooks/useWebSocket';
+import TokenIntel from './pages/TokenIntel';
+import ProjectHealth from './pages/ProjectHealth';
 
 /* ─── Design tokens ─── */
 const colors = {
@@ -582,6 +584,8 @@ const TABS = [
   { key: 'agents', label: 'Agents' },
   { key: 'toon', label: 'TOON' },
   { key: 'cost', label: 'Cost' },
+  { key: 'tokenburn', label: '💰 Burn' },
+  { key: 'health', label: '🏥 Health' },
   { key: 'simulator', label: 'Simulator' },
   { key: 'system', label: '⚙' },
 ] as const;
@@ -659,6 +663,8 @@ export default function App() {
         {tab === 'agents' && <AgentsPage />}
         {tab === 'toon' && <ToonPage />}
         {tab === 'cost' && <CostPage />}
+        {tab === 'tokenburn' && <TokenIntel />}
+        {tab === 'health' && <ProjectHealth />}
         {tab === 'simulator' && <SimulatorPage />}
         {tab === 'system' && <SystemPage />}
       </main>

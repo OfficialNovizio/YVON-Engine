@@ -18,8 +18,22 @@ import {
   getAnomalies
 } from './store'
 import {
-  writeToonToSupabase, writeEngineQueryToSupabase, writeCompileToSupabase
+  writeToonToSupabase, writeEngineQueryToSupabase, writeCompileToSupabase,
+  writeTokenUsage
 } from './supabase-writer'
+
+// ─── Token cost estimation (per 1M tokens, blended) ────────────────────
+function estimateCost(provider: string, model: string, inputTokens: number, outputTokens: number): number {
+  // Rough blended pricing per provider
+  const rates: Record<string, { input: number; output: number }> = {
+    openai:    { input: 2.5,  output: 10 },
+    anthropic: { input: 3,   output: 15 },
+    deepseek:  { input: 0.14, output: 0.28 },
+    openrouter:{ input: 2,   output: 8 },
+  }
+  const r = rates[provider] || { input: 1, output: 5 }
+  return Math.round(((inputTokens / 1_000_000) * r.input + (outputTokens / 1_000_000) * r.output) * 100000) / 100000
+}
 
 class MetricsCollector {
   // Always enabled — no guard
@@ -49,6 +63,16 @@ class MetricsCollector {
     persistToonCall(call)
     // Dual-write to Supabase (production persistence)
     writeToonToSupabase(call).catch(() => {})
+    // Bridge to YVON OS token_usage
+    writeTokenUsage({
+      agent_id: call.agentId || 'unknown',
+      route: `toongine-toon/${call.format}`,
+      model: call.model,
+      provider: call.provider,
+      input_tokens: call.inputTokens,
+      output_tokens: call.outputTokens,
+      cost_usd: estimateCost(call.provider, call.model, call.inputTokens, call.outputTokens),
+    }).catch(() => {})
   }
 
   recordEngineQuery(query: EngineQuery): void {
@@ -57,6 +81,16 @@ class MetricsCollector {
     if (this.engineQueries.length > 10000) this.engineQueries.shift()
     persistEngineQuery(query)
     writeEngineQueryToSupabase(query).catch(() => {})
+    // Bridge to YVON OS token_usage
+    writeTokenUsage({
+      agent_id: query.agentId || 'unknown',
+      route: 'toongine-engine',
+      model: query.model,
+      provider: query.provider,
+      input_tokens: Math.round(query.originalChars / 4),
+      output_tokens: Math.round(query.injectedChars / 4),
+      cost_usd: estimateCost(query.provider, query.model, Math.round(query.originalChars / 4), Math.round(query.injectedChars / 4)),
+    }).catch(() => {})
   }
 
   recordCompile(record: CompileRecord): void {

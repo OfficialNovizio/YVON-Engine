@@ -20,6 +20,8 @@ exports.getSupabaseProviderCosts = getSupabaseProviderCosts;
 exports.getSupabaseRecentQueries = getSupabaseRecentQueries;
 exports.getSupabaseCompileHistory = getSupabaseCompileHistory;
 exports.refreshSupabaseViews = refreshSupabaseViews;
+exports.writeTokenUsage = writeTokenUsage;
+exports.getYvonTokenUsage = getYvonTokenUsage;
 let _supabaseUrl = null;
 let _supabaseKey = null;
 let _checked = false;
@@ -162,5 +164,89 @@ async function refreshSupabaseViews() {
         });
     }
     catch { }
+}
+let _yvonCredentials = null;
+function getYvonCredentials() {
+    if (_yvonCredentials)
+        return _yvonCredentials;
+    _yvonCredentials = {
+        url: process.env.YVON_SUPABASE_URL || process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || null,
+        key: process.env.YVON_SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || null,
+    };
+    return _yvonCredentials;
+}
+async function writeTokenUsage(payload) {
+    const { url, key } = getYvonCredentials();
+    if (!url || !key)
+        return;
+    try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 3000);
+        await fetch(`${url}/rest/v1/token_usage`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'apikey': key,
+                'Authorization': `Bearer ${key}`,
+                'Prefer': 'return=minimal',
+            },
+            body: JSON.stringify({
+                agent_id: payload.agent_id,
+                route: payload.route,
+                model: payload.model,
+                provider: payload.provider,
+                input_tokens: payload.input_tokens,
+                output_tokens: payload.output_tokens,
+                cost_usd: payload.cost_usd,
+                session_id: payload.session_id || null,
+                timestamp: new Date().toISOString(),
+            }),
+            signal: controller.signal,
+        });
+        clearTimeout(timeout);
+    }
+    catch {
+        // Silent fail — data still lives in local SQLite
+    }
+}
+// ─── YVON Supabase read helpers (for token-burn dashboard API) ────────────────
+async function yvonSupabaseGet(path) {
+    const { url, key } = getYvonCredentials();
+    if (!url || !key)
+        throw new Error('YVON Supabase not configured');
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    try {
+        const res = await fetch(`${url}/rest/v1/${path}`, {
+            headers: {
+                'apikey': key,
+                'Authorization': `Bearer ${key}`,
+            },
+            signal: controller.signal,
+        });
+        clearTimeout(timeout);
+        if (!res.ok)
+            throw new Error(`YVON Supabase ${res.status}`);
+        return res.json();
+    }
+    catch (e) {
+        clearTimeout(timeout);
+        throw e;
+    }
+}
+async function getYvonTokenUsage(since, agentId, provider, model) {
+    let query = `token_usage?select=*&timestamp=gte.${since}&order=timestamp.desc&limit=5000`;
+    if (agentId)
+        query += `&agent_id=eq.${encodeURIComponent(agentId)}`;
+    if (provider)
+        query += `&provider=eq.${encodeURIComponent(provider)}`;
+    if (model)
+        query += `&model=eq.${encodeURIComponent(model)}`;
+    try {
+        return await yvonSupabaseGet(query);
+    }
+    catch {
+        return [];
+    }
 }
 //# sourceMappingURL=supabase-writer.js.map

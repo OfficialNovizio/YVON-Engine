@@ -8,6 +8,18 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.metrics = void 0;
 const store_1 = require("./store");
 const supabase_writer_1 = require("./supabase-writer");
+// ─── Token cost estimation (per 1M tokens, blended) ────────────────────
+function estimateCost(provider, model, inputTokens, outputTokens) {
+    // Rough blended pricing per provider
+    const rates = {
+        openai: { input: 2.5, output: 10 },
+        anthropic: { input: 3, output: 15 },
+        deepseek: { input: 0.14, output: 0.28 },
+        openrouter: { input: 2, output: 8 },
+    };
+    const r = rates[provider] || { input: 1, output: 5 };
+    return Math.round(((inputTokens / 1000000) * r.input + (outputTokens / 1000000) * r.output) * 100000) / 100000;
+}
 class MetricsCollector {
     constructor() {
         // Always enabled — no guard
@@ -36,6 +48,16 @@ class MetricsCollector {
         (0, store_1.persistToonCall)(call);
         // Dual-write to Supabase (production persistence)
         (0, supabase_writer_1.writeToonToSupabase)(call).catch(() => { });
+        // Bridge to YVON OS token_usage
+        (0, supabase_writer_1.writeTokenUsage)({
+            agent_id: call.agentId || 'unknown',
+            route: `toongine-toon/${call.format}`,
+            model: call.model,
+            provider: call.provider,
+            input_tokens: call.inputTokens,
+            output_tokens: call.outputTokens,
+            cost_usd: estimateCost(call.provider, call.model, call.inputTokens, call.outputTokens),
+        }).catch(() => { });
     }
     recordEngineQuery(query) {
         if (!this.enabled)
@@ -45,6 +67,16 @@ class MetricsCollector {
             this.engineQueries.shift();
         (0, store_1.persistEngineQuery)(query);
         (0, supabase_writer_1.writeEngineQueryToSupabase)(query).catch(() => { });
+        // Bridge to YVON OS token_usage
+        (0, supabase_writer_1.writeTokenUsage)({
+            agent_id: query.agentId || 'unknown',
+            route: 'toongine-engine',
+            model: query.model,
+            provider: query.provider,
+            input_tokens: Math.round(query.originalChars / 4),
+            output_tokens: Math.round(query.injectedChars / 4),
+            cost_usd: estimateCost(query.provider, query.model, Math.round(query.originalChars / 4), Math.round(query.injectedChars / 4)),
+        }).catch(() => { });
     }
     recordCompile(record) {
         if (!this.enabled)
