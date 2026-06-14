@@ -6,18 +6,19 @@ agent:
   level: 1
   hermes_profile: yvon
   hermes_skill: yvon/board
-
 purpose:
-  - Review council decisions. Assess risk. Challenge assumptions. Approve/reject/condition.
-
+- Review council decisions. Assess risk. Challenge assumptions. Approve/reject/condition.
 skills:
-  - marketplace/decision-critic
-  - operating-system/reflection-protocol
-  - executive-operations/business-health-diagnostic
-
+- custom/corporate-governance
+- custom/constitution-enforcement
+- custom/risk-assessment-matrix
+- marketplace/decision-critic
+- operating-system/reflection-protocol
+- operating-system/triple-pass-protocol
+- executive-operations/business-health-diagnostic
 tools:
-  - web_search
-  - terminal
-  - file
-  - browser
-  - session_search
+- web_search
+- terminal
+- file
+- browser
+- session_search

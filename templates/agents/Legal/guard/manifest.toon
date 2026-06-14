@@ -6,17 +6,19 @@ agent:
   level: 2
   hermes_profile: yvon
   hermes_skill: yvon/guard
-
 purpose:
-  - Protect YVON IP. Monitor open-source compliance. Track trademarks. Patent strategy.
-
+- Protect YVON IP. Monitor open-source compliance. Track trademarks. Patent strategy.
 skills:
-  - github-repo-management
-  - web_search
-
+- custom/open-source-compliance
+- custom/trademark-protection
+- custom/patent-landscape
+- operating-system/reflection-protocol
+- operating-system/triple-pass-protocol
+- web_search
+- github-repo-management
 tools:
-  - web_search
-  - terminal
-  - file
-  - browser
-  - session_search
+- web_search
+- terminal
+- file
+- browser
+- session_search

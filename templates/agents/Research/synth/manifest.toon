@@ -6,18 +6,20 @@ agent:
   level: 3
   hermes_profile: yvon
   hermes_skill: yvon/synth
-
 purpose:
-  - Synthesize research into recommendations. Connect dots. Build strategic theses.
-
+- Synthesize research into recommendations. Connect dots. Build strategic theses.
 skills:
-  - obsidian
-  - web_search
-  - plan
-
+- custom/research-synthesis
+- custom/thesis-building
+- custom/recommendation-framework
+- operating-system/reflection-protocol
+- operating-system/triple-pass-protocol
+- obsidian
+- web_search
+- plan
 tools:
-  - web_search
-  - terminal
-  - file
-  - browser
-  - session_search
+- web_search
+- terminal
+- file
+- browser
+- session_search

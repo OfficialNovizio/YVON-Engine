@@ -6,17 +6,20 @@ agent:
   level: 2
   hermes_profile: yvon
   hermes_skill: yvon/comply
-
 purpose:
-  - Monitor regulatory requirements. GDPR, CCPA, SOC2, ISO. Audit compliance. Flag gaps.
-
+- Monitor regulatory requirements. GDPR, CCPA, SOC2, ISO. Audit compliance. Flag gaps.
 skills:
-  - web_search
-  - obsidian
-
+- custom/gdpr-compliance
+- custom/soc2-framework
+- custom/regulatory-monitoring
+- custom/data-privacy-audit
+- operating-system/reflection-protocol
+- operating-system/triple-pass-protocol
+- web_search
+- obsidian
 tools:
-  - web_search
-  - terminal
-  - file
-  - browser
-  - session_search
+- web_search
+- terminal
+- file
+- browser
+- session_search

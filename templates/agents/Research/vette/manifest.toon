@@ -6,18 +6,20 @@ agent:
   level: 3
   hermes_profile: yvon
   hermes_skill: yvon/vette
-
 purpose:
-  - Verify claims from Scout/Radar/Forge. Cross-reference sources. Score truth confidence.
-
+- Verify claims from Scout/Radar/Forge. Cross-reference sources. Score truth confidence.
 skills:
-  - web_search
-  - arxiv
-  - systematic-debugging
-
+- custom/fact-checking
+- custom/source-credibility
+- custom/misinformation-detection
+- operating-system/reflection-protocol
+- operating-system/triple-pass-protocol
+- web_search
+- arxiv
+- systematic-debugging
 tools:
-  - web_search
-  - terminal
-  - file
-  - browser
-  - session_search
+- web_search
+- terminal
+- file
+- browser
+- session_search

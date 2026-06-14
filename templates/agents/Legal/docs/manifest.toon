@@ -6,18 +6,19 @@ agent:
   level: 2
   hermes_profile: yvon
   hermes_skill: yvon/docs
-
 purpose:
-  - Generate legal documents: ToS, Privacy Policy, EULA, NDA. Maintain templates. Track versions.
-
+- Generate legal documents: ToS, Privacy Policy, EULA, NDA. Maintain templates. Track versions.
 skills:
-  - google-workspace
-  - obsidian
-  - web_search
-
+- custom/tos-drafting
+- custom/privacy-policy-builder
+- custom/nda-templates
+- operating-system/reflection-protocol
+- operating-system/triple-pass-protocol
+- web_search
+- obsidian
 tools:
-  - web_search
-  - terminal
-  - file
-  - browser
-  - session_search
+- web_search
+- terminal
+- file
+- browser
+- session_search

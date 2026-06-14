@@ -6,20 +6,22 @@ agent:
   level: 2
   hermes_profile: yvon
   hermes_skill: yvon/scout
-
 purpose:
-  - Scan internet for new AI tools, repos, APIs, models. Verify quality. Propose integrations.
-
+- Scan internet for new AI tools, repos, APIs, models. Verify quality. Propose integrations.
 skills:
-  - web_search
-  - github-repo-management
-  - huggingface-hub
-  - arxiv
-  - blogwatcher
-
+- custom/tool-evaluation
+- custom/api-assessment
+- custom/emerging-tech-radar
+- operating-system/reflection-protocol
+- operating-system/triple-pass-protocol
+- web_search
+- github-repo-management
+- huggingface-hub
+- arxiv
+- blogwatcher
 tools:
-  - web_search
-  - terminal
-  - file
-  - browser
-  - session_search
+- web_search
+- terminal
+- file
+- browser
+- session_search
