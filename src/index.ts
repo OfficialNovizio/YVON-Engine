@@ -42,7 +42,7 @@ export type { MCPClient } from './adapters/mcp-client'
 
 // ─── Dashboard ─────────────────────────────────────────────────────────────────
 
-export { startDashboard, stopDashboard } from './dashboard'
+export { ToonGineDashboard } from './dashboard/ToonGineDashboard'
 export { injectDashboard } from './dashboard/inject'
 export type { InjectResult } from './dashboard/inject'
 

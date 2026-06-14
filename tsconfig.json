@@ -2,7 +2,9 @@
   "compilerOptions": {
     "target": "ES2020",
     "module": "commonjs",
-    "lib": ["ES2020"],
+    "lib": [
+      "ES2020"
+    ],
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
@@ -14,8 +16,18 @@
     "forceConsistentCasingInFileNames": true,
     "downlevelIteration": true,
     "resolveJsonModule": true,
-    "moduleResolution": "node"
+    "moduleResolution": "node",
+    "jsx": "react-jsx"
   },
-  "include": ["src/**/*.ts"],
-  "exclude": ["node_modules", "dist", "cli", "src/dashboard/ui", "src/**/*.test.ts"]
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "cli",
+    "src/dashboard/ui",
+    "src/**/*.test.ts"
+  ]
 }

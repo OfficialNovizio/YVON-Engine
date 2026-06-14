@@ -1,7 +1,7 @@
 {
   "name": "toongine",
   "version": "1.5.4",
-  "description": "ToonGine — TOON compression engine for AI agents. Context Intelligence Engine, knowledge graphs, Hermes sync. One install, full agent context pipeline.",
+  "description": "ToonGine \u2014 TOON compression engine for AI agents. Context Intelligence Engine, knowledge graphs, Hermes sync. One install, full agent context pipeline.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
@@ -28,7 +28,11 @@
     "./cli": "./cli/toongine.js",
     "./package.json": "./package.json",
     "./graphs": "./dist/graphs/index.js",
-    "./dashboard": "./dist/dashboard/index.js"
+    "./dashboard": {
+      "types": "./dist/dashboard/index.d.ts",
+      "import": "./dist/dashboard/index.js",
+      "require": "./dist/dashboard/index.js"
+    }
   },
   "bin": {
     "toongine": "./cli/toongine.js"
@@ -44,7 +48,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "test": "echo 'Tests pass — CI pending'",
+    "test": "echo 'Tests pass \u2014 CI pending'",
     "prepublishOnly": "npm run build",
     "prepare": "npm run build",
     "postinstall": "node scripts/postinstall.js"
@@ -76,6 +80,7 @@
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "^20.19.43",
+    "@types/react": "^19.2.17",
     "@types/ws": "^8.18.1",
     "typescript": "^5.9.3",
     "vitest": "^4.1.8"
@@ -87,6 +92,7 @@
     "better-sqlite3": "^12.10.0",
     "cors": "^2.8.6",
     "express": "^5.2.1",
+    "recharts": "^3.8.1",
     "ws": "^8.21.0"
   }
 }
