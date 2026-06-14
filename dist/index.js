@@ -16,8 +16,8 @@
 //   import { toonifyAll } from 'toongine/toon/auto'
 //   const result = toonifyAll('/path/to/project')
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.writeFile = exports.resolverStats = exports.clearResolveCache = exports.resolveMany = exports.resolve = exports.bpeDecode = exports.bpeEncode = exports.trainBPE = exports.stem = exports.createV3Engine = exports.compile = exports.strip = exports.expandWithDictionary = exports.parseDictionaryBlock = exports.decodeToonResponse = exports.ABBREV_MAP = exports.generateDictionaryString = exports.encodePrompt = exports.encodeMemory = exports.encodeDocument = exports.toonifyHermes = exports.compressHermesSkill = exports.computeHermesSessionDelta = exports.compressHermesMemory = exports.autoToonMiddleware = exports.toonifyAll = exports.injectToon = exports.scanProject = exports.runHealthChecks = exports.metrics = exports.injectDashboard = exports.stopDashboard = exports.startDashboard = exports.createMCPClient = exports.invalidateConfig = exports.getConfig = exports.jaccardEstimate = exports.minhashSignature = exports.blastRadius = exports.ContextPriorityQueue = exports.TfidfIndex = exports.BloomFilter = exports.computeDelta = exports.getOrCreateState = exports.dictToLine = exports.buildDictionary = exports.compress = exports.toon = exports.classifyTask = exports.buildCieContext = void 0;
-exports.pushToHermes = exports.syncWithHermes = exports.docStats = exports.getHumanPath = exports.getToonPath = exports.readDocForHuman = exports.readDocsForLLM = exports.readDoc = exports.writeMany = exports.deleteFile = void 0;
+exports.deleteFile = exports.writeFile = exports.resolverStats = exports.clearResolveCache = exports.resolveMany = exports.resolve = exports.bpeDecode = exports.bpeEncode = exports.trainBPE = exports.stem = exports.createV3Engine = exports.compile = exports.strip = exports.expandWithDictionary = exports.parseDictionaryBlock = exports.decodeToonResponse = exports.ABBREV_MAP = exports.generateDictionaryString = exports.encodePrompt = exports.encodeMemory = exports.encodeDocument = exports.toonifyHermes = exports.compressHermesSkill = exports.computeHermesSessionDelta = exports.compressHermesMemory = exports.autoToonMiddleware = exports.toonifyAll = exports.injectToon = exports.scanProject = exports.runHealthChecks = exports.metrics = exports.injectDashboard = exports.ToonGineDashboard = exports.createMCPClient = exports.invalidateConfig = exports.getConfig = exports.jaccardEstimate = exports.minhashSignature = exports.blastRadius = exports.ContextPriorityQueue = exports.TfidfIndex = exports.BloomFilter = exports.computeDelta = exports.getOrCreateState = exports.dictToLine = exports.buildDictionary = exports.compress = exports.toon = exports.classifyTask = exports.buildCieContext = void 0;
+exports.pushToHermes = exports.syncWithHermes = exports.docStats = exports.getHumanPath = exports.getToonPath = exports.readDocForHuman = exports.readDocsForLLM = exports.readDoc = exports.writeMany = void 0;
 exports.createEngine = createEngine;
 // ─── Main engine ──────────────────────────────────────────────────────────────
 var cie_1 = require("./cie");
@@ -49,9 +49,8 @@ Object.defineProperty(exports, "invalidateConfig", { enumerable: true, get: func
 var mcp_client_1 = require("./adapters/mcp-client");
 Object.defineProperty(exports, "createMCPClient", { enumerable: true, get: function () { return mcp_client_1.createMCPClient; } });
 // ─── Dashboard ─────────────────────────────────────────────────────────────────
-var dashboard_1 = require("./dashboard");
-Object.defineProperty(exports, "startDashboard", { enumerable: true, get: function () { return dashboard_1.startDashboard; } });
-Object.defineProperty(exports, "stopDashboard", { enumerable: true, get: function () { return dashboard_1.stopDashboard; } });
+var ToonGineDashboard_1 = require("./dashboard/ToonGineDashboard");
+Object.defineProperty(exports, "ToonGineDashboard", { enumerable: true, get: function () { return ToonGineDashboard_1.ToonGineDashboard; } });
 var inject_1 = require("./dashboard/inject");
 Object.defineProperty(exports, "injectDashboard", { enumerable: true, get: function () { return inject_1.injectDashboard; } });
 // ─── Metrics ───────────────────────────────────────────────────────────────────

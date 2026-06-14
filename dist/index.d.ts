@@ -8,7 +8,7 @@ export { getConfig, invalidateConfig } from './adapters/config';
 export type { EngineConfig } from './adapters/config';
 export { createMCPClient } from './adapters/mcp-client';
 export type { MCPClient } from './adapters/mcp-client';
-export { startDashboard, stopDashboard } from './dashboard';
+export { ToonGineDashboard } from './dashboard/ToonGineDashboard';
 export { injectDashboard } from './dashboard/inject';
 export type { InjectResult } from './dashboard/inject';
 export { metrics } from './metrics/collector';
